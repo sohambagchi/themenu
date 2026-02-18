@@ -3,8 +3,13 @@ import { NextResponse } from "next/server";
 import {
   getDashboardOwnerUserId,
   hasValidDashboardCredentials,
+  isDashboardPublicReadEnabled,
   requireDashboardSession
 } from "@/lib/dashboardAuth";
+import { normalizeNewItemInputList } from "@/lib/itemValidation";
+import { isAllowedRequestOrigin } from "@/lib/origin";
+import { getRequestIp } from "@/lib/requestMeta";
+import { checkRateLimit } from "@/lib/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { DbItemRow, Item, ItemStockKind, NewItemInput, TagValue } from "@/lib/types";
 
@@ -46,6 +51,13 @@ function toStockKind(raw: string | null): ItemStockKind {
 }
 
 export async function GET(request: Request) {
+  if (!isDashboardPublicReadEnabled()) {
+    const hasSession = await requireDashboardSession();
+    if (!hasSession) {
+      return NextResponse.json({ error: "Login required." }, { status: 401 });
+    }
+  }
+
   const supabase = getSupabaseAdminClient();
   const ownerUserId = getDashboardOwnerUserId();
   if (!supabase || !ownerUserId) {
@@ -75,22 +87,50 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const payload = (await request.json()) as {
-    items?: NewItemInput[];
-    username?: string;
-    password?: string;
-  };
-  const hasSession = await requireDashboardSession();
-  const hasCreds = hasValidDashboardCredentials(
-    String(payload.username ?? ""),
-    String(payload.password ?? "")
-  );
+  if (!isAllowedRequestOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+  }
 
-  if (!hasSession && !hasCreds) {
-    return NextResponse.json(
-      { error: "Login required. Provide valid username/password." },
-      { status: 401 }
-    );
+  const payload = (await request.json().catch(() => null)) as
+    | {
+        items?: NewItemInput[];
+        username?: string;
+        password?: string;
+      }
+    | null;
+
+  if (!payload) {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  const hasSession = await requireDashboardSession();
+
+  if (!hasSession) {
+    const username = String(payload.username ?? "").trim();
+    const password = String(payload.password ?? "");
+    const ip = getRequestIp(request);
+
+    const rateLimit = checkRateLimit({
+      key: `inline-item-auth:${ip}`,
+      max: 20,
+      windowMs: 10 * 60 * 1000
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many auth attempts. Try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) }
+        }
+      );
+    }
+
+    if (!hasValidDashboardCredentials(username, password)) {
+      return NextResponse.json(
+        { error: "Login required. Provide valid username/password." },
+        { status: 401 }
+      );
+    }
   }
 
   const supabase = getSupabaseAdminClient();
@@ -102,13 +142,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const items = Array.isArray(payload.items) ? payload.items : [];
-
-  if (items.length === 0) {
-    return NextResponse.json({ error: "No items provided." }, { status: 400 });
+  const normalized = normalizeNewItemInputList(payload.items);
+  if (!normalized.ok) {
+    return NextResponse.json({ error: normalized.error }, { status: 400 });
   }
 
-  const insertRows = items.map((item) => itemToInsertRow(item, ownerUserId));
+  const insertRows = normalized.items.map((item) => itemToInsertRow(item, ownerUserId));
   const { error } = await supabase.from("items").insert(insertRows);
 
   if (error) {

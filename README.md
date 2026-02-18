@@ -11,21 +11,28 @@ Personal food inventory and deterministic meal pairing app built with Next.js + 
    - `SUPABASE_SERVICE_ROLE_KEY`: used by server routes to read/write inventory
    - `DASHBOARD_USERNAME`: static dashboard login username
    - `DASHBOARD_PASSWORD`: static dashboard login password
-   - `DASHBOARD_SESSION_TOKEN`: long random session token for cookie auth
+   - `DASHBOARD_SESSION_TOKEN`: long random secret used to sign dashboard session cookies
    - `DASHBOARD_OWNER_USER_ID`: an existing `auth.users.id` to own all inventory rows
+   - `DASHBOARD_PUBLIC_READ` (optional): set `true`/`1`/`yes` only if you intentionally want unauthenticated inventory reads
 
-Viewing inventory pages does not require login. Login is only required for adding new items
-through Sourcing and Mise en Place.
+By default, viewing inventory now requires login. If you intentionally want public read access,
+set `DASHBOARD_PUBLIC_READ=true`.
+Login is required for adding new items through Sourcing and Mise en Place.
 If you are not logged in, Mise en Place shows an inline username/password prompt on submit.
 
 During cooking/consumption:
 - On Pantry, add items to `Tray`, then click `Cooked`.
 - On Prepared foods, add items to `Order`, then click `Eat`.
 - If you are already logged in, stock updates immediately. If not, a username/password prompt appears.
+- Manual +/- stock adjustments require an active dashboard login.
 
 Photo uploads:
 - In Mise en Place, use `Upload Photo` (file picker) or `Take Photo` (mobile camera option).
 - Uploads require login and currently accept JPEG/PNG/WebP/HEIC/HEIF up to 5 MB.
+
+Security notes:
+- Login and inline username/password auth attempts are rate-limited.
+- State-changing APIs validate request origin to reduce CSRF risk.
 
 Example:
 

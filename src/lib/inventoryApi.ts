@@ -35,7 +35,7 @@ export async function adjustInventoryQuantity(itemId: string, delta: number) {
   });
 
   if (response.status === 401) {
-    throw new Error("Login required to adjust Ingredient stock.");
+    throw new Error("Login required to adjust stock.");
   }
 
   if (!response.ok) {

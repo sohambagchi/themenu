@@ -57,7 +57,7 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
     }
   });
 
-  const canManualAdjust = !isIngredientView || sessionQuery.data?.authed === true;
+  const canManualAdjust = sessionQuery.data?.authed === true;
 
   const adjustMutation = useMutation({
     mutationFn: ({ id, delta }: { id: string; delta: number }) => adjustInventoryQuantity(id, delta),
@@ -235,7 +235,11 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
         )}
 
         {inventoryQuery.isError && (
-          <p className="font-mono text-sm text-red-500">Could not load inventory.</p>
+          <p className="font-mono text-sm text-red-500">
+            {inventoryQuery.error instanceof Error
+              ? inventoryQuery.error.message
+              : "Could not load inventory."}
+          </p>
         )}
 
         <div className={isIngredientView ? "space-y-3" : "grid gap-4 sm:grid-cols-2 xl:grid-cols-3"}>

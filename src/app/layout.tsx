@@ -22,7 +22,14 @@ const bodyFont = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "The Menu",
-  description: "Personal food inventory and deterministic meal pairing."
+  description: "Personal food inventory and deterministic meal pairing.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml", sizes: "any" },
+      { url: "/icon.png", type: "image/png" }
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180" }]
+  }
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

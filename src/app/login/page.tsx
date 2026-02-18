@@ -20,6 +20,7 @@ export default async function LoginPage({
   const params = await searchParams;
   const nextPath = getSanitizedNextPath(params.next ?? "/");
   const hasError = params.error === "invalid";
+  const isRateLimited = params.error === "rate_limited";
   const cookieStore = await cookies();
   const sessionValue = cookieStore.get(DASHBOARD_SESSION_COOKIE)?.value;
 
@@ -59,6 +60,11 @@ export default async function LoginPage({
           </label>
 
           {hasError && <p className="font-mono text-xs text-red-500">Invalid username or password.</p>}
+          {isRateLimited && (
+            <p className="font-mono text-xs text-red-500">
+              Too many login attempts. Wait a few minutes and try again.
+            </p>
+          )}
 
           <button
             type="submit"
