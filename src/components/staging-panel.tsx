@@ -17,6 +17,7 @@ function toInventoryItem(line: StagedLineItem): NewItemInput {
     stockKind: "Ingredient",
     location: line.location,
     type: line.type,
+    ingredients: [],
     tags: line.tags
   };
 }
@@ -70,7 +71,7 @@ export function StagingPanel() {
             Raw OCR Text
           </span>
           <p className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted">
-            Receipt parsing commits to Ingredients only.
+            Receipt parsing commits to Pantry only.
           </p>
           <textarea
             value={rawText}
@@ -93,7 +94,7 @@ export function StagingPanel() {
             onClick={() => commitMutation.mutate()}
             className="rounded border border-text bg-text px-3 py-2 text-xs uppercase tracking-[0.14em] text-canvas transition disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Commit to Ingredients
+            Commit to Pantry
           </button>
         </div>
       </section>
@@ -146,7 +147,7 @@ export function StagingPanel() {
                     )
                   )
                 }
-                className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
+                className="select-field rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
               >
                 <option>Protein</option>
                 <option>Carb</option>

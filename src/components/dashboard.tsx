@@ -12,11 +12,18 @@ import {
 import { getRecommendations } from "@/lib/recommendationEngine";
 import type { Item, ItemStockKind, ItemType } from "@/lib/types";
 
-const typeOptions: Array<"All" | ItemType> = ["All", "Protein", "Carb", "Veg", "Ferment/Pickle"];
+const DEFAULT_TYPE_OPTIONS: ItemType[] = ["Protein", "Carb", "Veg", "Ferment/Pickle"];
 
 interface ActionItem {
   item: Item;
   quantity: number;
+}
+
+function formatIngredientSummary(ingredients: string[], limit = 3) {
+  if (ingredients.length === 0) return "";
+  if (ingredients.length <= limit) return ingredients.join(", ");
+  const shown = ingredients.slice(0, limit).join(", ");
+  return `${shown} +${ingredients.length - limit}`;
 }
 
 export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
@@ -48,6 +55,8 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
       return (await response.json()) as { authed: boolean };
     }
   });
+
+  const canManualAdjust = !isIngredientView || sessionQuery.data?.authed === true;
 
   const adjustMutation = useMutation({
     mutationFn: ({ id, delta }: { id: string; delta: number }) => adjustInventoryQuantity(id, delta),
@@ -107,6 +116,12 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
     return ["All", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
   }, [items]);
 
+  const typeOptions = useMemo(() => {
+    const set = new Set<string>(DEFAULT_TYPE_OPTIONS);
+    for (const item of items) set.add(item.type);
+    return ["All", ...Array.from(set)] as Array<"All" | ItemType>;
+  }, [items]);
+
   const filteredItems = useMemo(
     () =>
       items.filter((item) => {
@@ -144,7 +159,8 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
 
   const updateActionQuantity = (itemId: string, nextQuantity: number) => {
     setActionMap((current) => {
-      const safeNext = Math.max(0, Math.trunc(nextQuantity));
+      const maxAllowed = Math.max(0, itemById.get(itemId)?.quantity ?? 0);
+      const safeNext = Math.min(maxAllowed, Math.max(0, Math.trunc(nextQuantity)));
       if (safeNext <= 0) {
         if (!(itemId in current)) return current;
         const copy = { ...current };
@@ -180,7 +196,7 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
       <section className="rounded-lg border border-edge bg-card p-5">
         <div className="mb-5">
           <h2 className="font-serif text-2xl">
-            {stockKind === "Prepared" ? "Prepared Foods" : "Ingredients"}
+            {stockKind === "Prepared" ? "Menu" : "Pantry"}
           </h2>
           <p className="mt-1 font-mono text-xs uppercase tracking-[0.14em] text-muted">
             {stockKind === "Prepared"
@@ -195,7 +211,7 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
             <select
               value={typeFilter}
               onChange={(event) => setTypeFilter(event.target.value as "All" | ItemType)}
-              className="rounded border border-edge bg-canvas px-3 py-2 text-sm text-text outline-none transition focus:border-text"
+              className="select-field rounded border border-edge bg-canvas px-3 py-2 text-sm text-text outline-none transition focus:border-text"
             >
               {typeOptions.map((option) => (
                 <option key={option} value={option}>
@@ -210,7 +226,7 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
             <select
               value={tagFilter}
               onChange={(event) => setTagFilter(event.target.value)}
-              className="rounded border border-edge bg-canvas px-3 py-2 text-sm text-text outline-none transition focus:border-text"
+              className="select-field rounded border border-edge bg-canvas px-3 py-2 text-sm text-text outline-none transition focus:border-text"
             >
               {availableTags.map((tag) => (
                 <option key={tag} value={tag}>
@@ -229,31 +245,38 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
           <p className="font-mono text-sm text-red-500">Could not load inventory.</p>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className={isIngredientView ? "space-y-3" : "grid gap-4 sm:grid-cols-2 xl:grid-cols-3"}>
           {filteredItems.map((item) => (
             <article
               key={item.id}
-              className={`overflow-hidden rounded-md border bg-canvas transition ${
+              className={`rounded-md border bg-canvas transition ${
                 selectedItemId === item.id ? "border-text shadow-card" : "border-edge"
               }`}
             >
-              <div className="relative h-36 w-full bg-black/10">
-                {item.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.photoUrl} alt={item.name} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.2em] text-muted">
-                    No Photo
-                  </div>
-                )}
-              </div>
+              {!isIngredientView && (
+                <div className="relative h-36 w-full bg-black/10">
+                  {item.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.photoUrl} alt={item.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.2em] text-muted">
+                      No Photo
+                    </div>
+                  )}
+                </div>
+              )}
 
-              <div className="space-y-4 p-4">
+              <div className={`${isIngredientView ? "space-y-3" : "space-y-4"} p-4`}>
                 <div>
                   <h3 className="font-serif text-xl">{item.name}</h3>
                   <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
                     {item.type} • {item.location}
                   </p>
+                  {!isIngredientView && item.ingredients.length > 0 && (
+                    <p className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted">
+                      Ingredients: {formatIngredientSummary(item.ingredients)}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between text-sm">
@@ -262,20 +285,24 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => adjustMutation.mutate({ id: item.id, delta: -1 })}
-                    className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
-                  >
-                    -
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => adjustMutation.mutate({ id: item.id, delta: 1 })}
-                    className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
-                  >
-                    +
-                  </button>
+                  {canManualAdjust && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => adjustMutation.mutate({ id: item.id, delta: -1 })}
+                        className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => adjustMutation.mutate({ id: item.id, delta: 1 })}
+                        className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
+                      >
+                        +
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     disabled={item.quantity <= 0}
@@ -426,8 +453,8 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
           </form>
         )}
 
-        {actionNotice && <p className="mt-3 font-mono text-sm text-muted">{actionNotice}</p>}
-      </section>
+      {actionNotice && <p className="mt-3 font-mono text-sm text-muted">{actionNotice}</p>}
+    </section>
 
       {stockKind === "Prepared" && (
         <section className="rounded-lg border border-edge bg-card p-5">

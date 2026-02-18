@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { getDashboardOwnerUserId, requireDashboardSession } from "@/lib/dashboardAuth";
+import {
+  getDashboardOwnerUserId,
+  hasValidDashboardCredentials,
+  requireDashboardSession
+} from "@/lib/dashboardAuth";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { DbItemRow, Item, ItemStockKind, NewItemInput, TagValue } from "@/lib/types";
 
@@ -15,6 +19,7 @@ function rowToItem(row: DbItemRow): Item {
     stockKind: row.stock_kind,
     location: row.location,
     type: row.type,
+    ingredients: row.ingredients ?? [],
     tags: (row.tags ?? []) as TagValue[],
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -31,6 +36,7 @@ function itemToInsertRow(item: NewItemInput, ownerUserId: string) {
     stock_kind: item.stockKind,
     location: item.location,
     type: item.type,
+    ingredients: item.ingredients ?? [],
     tags: item.tags
   };
 }
@@ -52,21 +58,39 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const stockKind = toStockKind(searchParams.get("stockKind"));
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("items")
     .select("*")
     .eq("user_id", ownerUserId)
-    .eq("stock_kind", stockKind)
-    .order("date_added", { ascending: false });
+    .eq("stock_kind", stockKind);
+
+  if (stockKind === "Ingredient") {
+    query = query.gt("quantity", 0);
+  }
+
+  const { data, error } = await query.order("date_added", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ items: (data ?? []).map((row: any) => rowToItem(row as DbItemRow)) });
 }
 
 export async function POST(request: Request) {
-  const authed = await requireDashboardSession();
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const payload = (await request.json()) as {
+    items?: NewItemInput[];
+    username?: string;
+    password?: string;
+  };
+  const hasSession = await requireDashboardSession();
+  const hasCreds = hasValidDashboardCredentials(
+    String(payload.username ?? ""),
+    String(payload.password ?? "")
+  );
+
+  if (!hasSession && !hasCreds) {
+    return NextResponse.json(
+      { error: "Login required. Provide valid username/password." },
+      { status: 401 }
+    );
   }
 
   const supabase = getSupabaseAdminClient();
@@ -78,7 +102,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const payload = (await request.json()) as { items?: NewItemInput[] };
   const items = Array.isArray(payload.items) ? payload.items : [];
 
   if (items.length === 0) {

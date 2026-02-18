@@ -5,11 +5,8 @@ function asStockKind(raw: string): ItemStockKind {
 }
 
 export function toSupabaseTypeLabel(value: string): ItemType {
-  if (value === "Protein" || value === "Carb" || value === "Veg" || value === "Ferment/Pickle") {
-    return value;
-  }
-
-  return "Veg";
+  const normalized = value.trim();
+  return (normalized.length > 0 ? normalized : "Veg") as ItemType;
 }
 
 export async function fetchInventoryItems(stockKind: ItemStockKind) {
@@ -37,21 +34,39 @@ export async function adjustInventoryQuantity(itemId: string, delta: number) {
     body: JSON.stringify({ id: itemId, delta })
   });
 
+  if (response.status === 401) {
+    throw new Error("Login required to adjust Ingredient stock.");
+  }
+
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new Error(payload?.error ?? "Failed to adjust quantity.");
   }
 }
 
-export async function insertItems(items: NewItemInput[]) {
+export async function insertItems(
+  items: NewItemInput[],
+  username?: string,
+  password?: string
+) {
+  const payload: {
+    items: NewItemInput[];
+    username?: string;
+    password?: string;
+  } = { items };
+
+  if (username) payload.username = username;
+  if (password) payload.password = password;
+
   const response = await fetch("/api/items", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items })
+    body: JSON.stringify(payload)
   });
 
   if (response.status === 401) {
-    throw new Error("Login required to add new items. Open /login.");
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Login required to add new items. Open /login.");
   }
 
   if (!response.ok) {
@@ -84,4 +99,26 @@ export async function consumeInventoryItems(
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new Error(payload?.error ?? "Failed to update stock.");
   }
+}
+
+export async function uploadInventoryImage(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch("/api/uploads/image", {
+    method: "POST",
+    body: formData
+  });
+
+  if (response.status === 401) {
+    throw new Error("Login required to upload photos. Open /login.");
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Failed to upload photo.");
+  }
+
+  const payload = (await response.json()) as { url: string };
+  return payload.url;
 }

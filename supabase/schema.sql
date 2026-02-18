@@ -26,7 +26,8 @@ create table public.items (
   date_added date not null default current_date,
   stock_kind public.item_stock_kind not null default 'Prepared',
   location public.item_location not null,
-  type public.item_type not null,
+  type text not null check (char_length(trim(type)) > 0),
+  ingredients text[] not null default '{}',
   tags text[] not null default '{}',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -114,6 +115,17 @@ create policy "pairing_rules_delete_own"
 on public.pairing_rules
 for delete
 using (auth.uid() = user_id);
+
+-- Public photo bucket for item images.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'item-photos',
+  'item-photos',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+)
+on conflict (id) do nothing;
 
 -- Seed deterministic starter rules
 insert into public.pairing_rules (

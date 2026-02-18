@@ -60,15 +60,18 @@ export async function POST(request: Request) {
   const ids = operations.map((operation) => operation.id);
   const { data: rows, error: readError } = await supabase
     .from("items")
-    .select("id,quantity")
+    .select("id,quantity,stock_kind")
     .eq("user_id", ownerUserId)
     .in("id", ids);
 
   if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
 
-  const quantityById = new Map<string, number>();
+  const quantityById = new Map<string, { quantity: number; stockKind: string }>();
   for (const row of rows ?? []) {
-    quantityById.set(String((row as { id: string }).id), Number((row as { quantity: number }).quantity));
+    quantityById.set(String((row as { id: string }).id), {
+      quantity: Number((row as { quantity: number }).quantity),
+      stockKind: String((row as { stock_kind: string }).stock_kind)
+    });
   }
 
   for (const operation of operations) {
@@ -81,8 +84,20 @@ export async function POST(request: Request) {
   }
 
   for (const operation of operations) {
-    const current = quantityById.get(operation.id) ?? 0;
-    const next = Math.max(0, current - operation.quantity);
+    const current = quantityById.get(operation.id);
+    if (!current) continue;
+    const next = Math.max(0, current.quantity - operation.quantity);
+
+    if (current.stockKind === "Ingredient" && next === 0) {
+      const { error: deleteError } = await supabase
+        .from("items")
+        .delete()
+        .eq("id", operation.id)
+        .eq("user_id", ownerUserId);
+
+      if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+      continue;
+    }
 
     const { error: writeError } = await supabase
       .from("items")

@@ -1,6 +1,7 @@
 export type ItemLocation = "Freezer" | "Pantry" | "Fridge";
 
-export type ItemType = "Protein" | "Carb" | "Veg" | "Ferment/Pickle";
+export type KnownItemType = "Protein" | "Carb" | "Veg" | "Ferment/Pickle";
+export type ItemType = KnownItemType | (string & {});
 export type ItemStockKind = "Prepared" | "Ingredient";
 
 export type KnownTag =
@@ -30,6 +31,7 @@ export interface Item {
   stockKind: ItemStockKind;
   location: ItemLocation;
   type: ItemType;
+  ingredients: string[];
   tags: TagValue[];
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
@@ -43,6 +45,7 @@ export interface NewItemInput {
   stockKind: ItemStockKind;
   location: ItemLocation;
   type: ItemType;
+  ingredients: string[];
   tags: TagValue[];
 }
 
@@ -56,6 +59,7 @@ export interface DbItemRow {
   stock_kind: ItemStockKind;
   location: ItemLocation;
   type: ItemType;
+  ingredients: string[] | null;
   tags: string[] | null;
   created_at: string;
   updated_at: string;

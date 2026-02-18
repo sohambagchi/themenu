@@ -16,11 +16,16 @@ Personal food inventory and deterministic meal pairing app built with Next.js + 
 
 Viewing inventory pages does not require login. Login is only required for adding new items
 through Sourcing and Mise en Place.
+If you are not logged in, Mise en Place shows an inline username/password prompt on submit.
 
 During cooking/consumption:
-- On Ingredients, add items to `Tray`, then click `Cooked`.
+- On Pantry, add items to `Tray`, then click `Cooked`.
 - On Prepared foods, add items to `Order`, then click `Eat`.
 - If you are already logged in, stock updates immediately. If not, a username/password prompt appears.
+
+Photo uploads:
+- In Mise en Place, use `Upload Photo` (file picker) or `Take Photo` (mobile camera option).
+- Uploads require login and currently accept JPEG/PNG/WebP/HEIC/HEIF up to 5 MB.
 
 Example:
 
@@ -34,6 +39,8 @@ Run `supabase/schema.sql` in the Supabase SQL editor.
 
 If your DB was already initialized from an older schema, run the SQL from:
 `supabase/migrations/20260218_add_item_stock_kind.sql`
+`supabase/migrations/20260218_create_item_photos_bucket.sql`
+`supabase/migrations/20260218_items_type_text_and_ingredients.sql`
 
 ## 3) Run locally (Bun)
 
@@ -47,7 +54,8 @@ Open `http://localhost:3000`.
 ## 4) Routes
 
 - `/`: Prepared foods inventory
-- `/ingredients`: Ingredient inventory
-- `/sourcing`: Receipt sourcing flow (commits to Ingredient inventory only)
+- `/ingredients`: Pantry inventory
+- `/sourcing`: Receipt sourcing flow (commits to Pantry inventory only)
 - `/mise-en-place`: Add finished items to Prepared inventory
 - `/login`: Static username/password entry
+- `/api/uploads/image`: authenticated image upload endpoint (used by Mise en Place)

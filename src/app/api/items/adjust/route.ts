@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getDashboardOwnerUserId } from "@/lib/dashboardAuth";
+import { getDashboardOwnerUserId, requireDashboardSession } from "@/lib/dashboardAuth";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
@@ -23,14 +23,36 @@ export async function POST(request: Request) {
 
   const { data: row, error: readError } = await supabase
     .from("items")
-    .select("quantity")
+    .select("quantity,stock_kind")
     .eq("id", id)
     .eq("user_id", ownerUserId)
     .single();
 
   if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
 
+  const isIngredient = String((row as { stock_kind: string }).stock_kind) === "Ingredient";
+  if (isIngredient) {
+    const authed = await requireDashboardSession();
+    if (!authed) {
+      return NextResponse.json(
+        { error: "Login required to manually adjust Ingredient stock." },
+        { status: 401 }
+      );
+    }
+  }
+
   const nextQty = Math.max(0, Number(row.quantity) + delta);
+  if (isIngredient && nextQty === 0) {
+    const { error: deleteError } = await supabase
+      .from("items")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", ownerUserId);
+
+    if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    return NextResponse.json({ ok: true, quantity: 0, removed: true });
+  }
+
   const { error: writeError } = await supabase
     .from("items")
     .update({ quantity: nextQty })
