@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { StyledSelect } from "@/components/styled-select";
 import { insertItems } from "@/lib/inventoryApi";
 import { mockOcrScan, parseReceiptText } from "@/lib/staging";
 import type { ItemType, NewItemInput, StagedLineItem } from "@/lib/types";
@@ -138,22 +139,19 @@ export function StagingPanel() {
                 className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
               />
 
-              <select
+              <StyledSelect
                 value={line.type}
-                onChange={(event) =>
+                onChange={(nextValue) =>
                   setStaged((current) =>
                     current.map((item) =>
-                      item.id === line.id ? { ...item, type: event.target.value as ItemType } : item
+                      item.id === line.id ? { ...item, type: nextValue as ItemType } : item
                     )
                   )
                 }
-                className="select-field rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
-              >
-                <option>Protein</option>
-                <option>Carb</option>
-                <option>Veg</option>
-                <option>Ferment/Pickle</option>
-              </select>
+                options={["Protein", "Carb", "Veg", "Ferment/Pickle"]}
+                buttonClassName="bg-card px-2 py-1"
+                ariaLabel="Ingredient type"
+              />
 
               <input
                 value={line.tags.join(", ")}

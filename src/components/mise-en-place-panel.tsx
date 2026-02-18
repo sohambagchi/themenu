@@ -3,6 +3,7 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { StyledSelect } from "@/components/styled-select";
 import { insertItems, uploadInventoryImage } from "@/lib/inventoryApi";
 import type { ItemLocation, ItemType, NewItemInput, TagValue } from "@/lib/types";
 
@@ -243,31 +244,27 @@ export function MiseEnPlacePanel() {
 
         <label className="block">
           <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Location</span>
-          <select
+          <StyledSelect
             value={location}
-            onChange={(event) => setLocation(event.target.value as ItemLocation)}
-            className="select-field mt-2 w-full rounded border border-edge bg-canvas px-3 py-2 text-sm outline-none transition focus:border-text"
-          >
-            <option>Fridge</option>
-            <option>Freezer</option>
-            <option>Pantry</option>
-          </select>
+            onChange={(nextValue) => setLocation(nextValue as ItemLocation)}
+            options={["Fridge", "Freezer", "Pantry"]}
+            className="mt-2"
+            buttonClassName="bg-canvas"
+            ariaLabel="Location"
+          />
         </label>
 
         <div className="block">
           <label className="block">
             <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Type</span>
-            <select
+            <StyledSelect
               value={type}
-              onChange={(event) => setType(event.target.value as ItemType)}
-              className="select-field mt-2 w-full rounded border border-edge bg-canvas px-3 py-2 text-sm outline-none transition focus:border-text"
-            >
-              {allTypeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+              onChange={(nextValue) => setType(nextValue as ItemType)}
+              options={allTypeOptions}
+              className="mt-2"
+              buttonClassName="bg-canvas"
+              ariaLabel="Type"
+            />
           </label>
           {sessionQuery.data?.authed && (
             <div className="mt-2 flex gap-2">

@@ -10,6 +10,7 @@ import {
   fetchInventoryItems
 } from "@/lib/inventoryApi";
 import { getRecommendations } from "@/lib/recommendationEngine";
+import { StyledSelect } from "@/components/styled-select";
 import type { Item, ItemStockKind, ItemType } from "@/lib/types";
 
 const DEFAULT_TYPE_OPTIONS: ItemType[] = ["Protein", "Carb", "Veg", "Ferment/Pickle"];
@@ -208,32 +209,24 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
         <div className="mb-4 flex flex-wrap items-end gap-4">
           <label className="flex min-w-40 flex-col gap-1.5 text-xs uppercase tracking-[0.15em] text-muted">
             Course
-            <select
+            <StyledSelect
               value={typeFilter}
-              onChange={(event) => setTypeFilter(event.target.value as "All" | ItemType)}
-              className="select-field rounded border border-edge bg-canvas px-3 py-2 text-sm text-text outline-none transition focus:border-text"
-            >
-              {typeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+              onChange={(nextValue) => setTypeFilter(nextValue as "All" | ItemType)}
+              options={typeOptions}
+              buttonClassName="bg-canvas"
+              ariaLabel="Course filter"
+            />
           </label>
 
           <label className="flex min-w-40 flex-col gap-1.5 text-xs uppercase tracking-[0.15em] text-muted">
             Tags
-            <select
+            <StyledSelect
               value={tagFilter}
-              onChange={(event) => setTagFilter(event.target.value)}
-              className="select-field rounded border border-edge bg-canvas px-3 py-2 text-sm text-text outline-none transition focus:border-text"
-            >
-              {availableTags.map((tag) => (
-                <option key={tag} value={tag}>
-                  {tag}
-                </option>
-              ))}
-            </select>
+              onChange={(nextValue) => setTagFilter(nextValue)}
+              options={availableTags}
+              buttonClassName="bg-canvas"
+              ariaLabel="Tag filter"
+            />
           </label>
         </div>
 
