@@ -1,5 +1,5 @@
-import { StagingPanel } from "@/components/staging-panel";
+import { redirect } from "next/navigation";
 
 export default function StagingPage() {
-  return <StagingPanel />;
+  redirect("/sourcing");
 }

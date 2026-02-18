@@ -1,92 +1,7 @@
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { DbItemRow, Item, ItemType, TagValue } from "@/lib/types";
+import type { Item, ItemStockKind, ItemType, NewItemInput } from "@/lib/types";
 
-const MOCK_ITEMS: Item[] = [
-  {
-    id: "demo-1",
-    userId: "demo",
-    name: "Roast Chicken",
-    photoUrl:
-      "https://images.unsplash.com/photo-1598103442097-8b74394b95c6?auto=format&fit=crop&w=800&q=80",
-    quantity: 2,
-    dateAdded: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString().slice(0, 10),
-    location: "Fridge",
-    type: "Protein",
-    tags: ["Dry", "Indian", "Spicy"],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: "demo-2",
-    userId: "demo",
-    name: "Dal Makhani",
-    photoUrl:
-      "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=800&q=80",
-    quantity: 4,
-    dateAdded: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString().slice(0, 10),
-    location: "Fridge",
-    type: "Veg",
-    tags: ["Saucy", "Indian", "Gravy"],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: "demo-3",
-    userId: "demo",
-    name: "Steamed Rice",
-    photoUrl:
-      "https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?auto=format&fit=crop&w=800&q=80",
-    quantity: 5,
-    dateAdded: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString().slice(0, 10),
-    location: "Pantry",
-    type: "Carb",
-    tags: ["Neutral", "Indian"],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: "demo-4",
-    userId: "demo",
-    name: "Cucumber Raita",
-    photoUrl:
-      "https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&w=800&q=80",
-    quantity: 3,
-    dateAdded: new Date().toISOString().slice(0, 10),
-    location: "Fridge",
-    type: "Ferment/Pickle",
-    tags: ["Cooling", "Wet"],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
-
-function rowToItem(row: DbItemRow): Item {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    name: row.name,
-    photoUrl: row.photo_url,
-    quantity: row.quantity,
-    dateAdded: row.date_added,
-    location: row.location,
-    type: row.type,
-    tags: (row.tags ?? []) as TagValue[],
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  };
-}
-
-function itemToRow(item: Item) {
-  return {
-    user_id: item.userId,
-    name: item.name,
-    photo_url: item.photoUrl,
-    quantity: item.quantity,
-    date_added: item.dateAdded,
-    location: item.location,
-    type: item.type,
-    tags: item.tags
-  };
+function asStockKind(raw: string): ItemStockKind {
+  return raw === "Ingredient" ? "Ingredient" : "Prepared";
 }
 
 export function toSupabaseTypeLabel(value: string): ItemType {
@@ -97,43 +12,76 @@ export function toSupabaseTypeLabel(value: string): ItemType {
   return "Veg";
 }
 
-export async function fetchInventoryItems() {
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) return MOCK_ITEMS;
+export async function fetchInventoryItems(stockKind: ItemStockKind) {
+  const response = await fetch(`/api/items?stockKind=${stockKind}`, {
+    method: "GET",
+    cache: "no-store"
+  });
 
-  const { data, error } = await supabase
-    .from("items")
-    .select("*")
-    .order("date_added", { ascending: false });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Failed to load inventory.");
+  }
 
-  if (error) throw error;
-  return (data ?? []).map((row) => rowToItem(row as DbItemRow));
+  const payload = (await response.json()) as { items: Item[] };
+  return (payload.items ?? []).map((item) => ({
+    ...item,
+    stockKind: asStockKind(item.stockKind)
+  }));
 }
 
 export async function adjustInventoryQuantity(itemId: string, delta: number) {
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) return;
+  const response = await fetch("/api/items/adjust", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: itemId, delta })
+  });
 
-  const { data: row, error: readError } = await supabase
-    .from("items")
-    .select("quantity")
-    .eq("id", itemId)
-    .single();
-
-  if (readError) throw readError;
-
-  const next = Math.max(0, Number(row.quantity) + delta);
-  const { error } = await supabase.from("items").update({ quantity: next }).eq("id", itemId);
-
-  if (error) throw error;
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Failed to adjust quantity.");
+  }
 }
 
-export async function insertItems(items: Item[]) {
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) return;
+export async function insertItems(items: NewItemInput[]) {
+  const response = await fetch("/api/items", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items })
+  });
 
-  const payload = items.map((item) => itemToRow(item));
-  const { error } = await supabase.from("items").insert(payload);
+  if (response.status === 401) {
+    throw new Error("Login required to add new items. Open /login.");
+  }
 
-  if (error) throw error;
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Failed to insert items.");
+  }
+}
+
+export async function consumeInventoryItems(
+  operations: Array<{ id: string; quantity: number }>,
+  username?: string,
+  password?: string
+) {
+  const payload: {
+    operations: Array<{ id: string; quantity: number }>;
+    username?: string;
+    password?: string;
+  } = { operations };
+
+  if (username) payload.username = username;
+  if (password) payload.password = password;
+
+  const response = await fetch("/api/items/consume", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Failed to update stock.");
+  }
 }

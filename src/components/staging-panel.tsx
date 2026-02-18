@@ -5,23 +5,19 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { insertItems } from "@/lib/inventoryApi";
 import { mockOcrScan, parseReceiptText } from "@/lib/staging";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { Item, ItemType, StagedLineItem } from "@/lib/types";
+import type { ItemType, NewItemInput, StagedLineItem } from "@/lib/types";
 
-function toInventoryItem(line: StagedLineItem, userId: string): Item {
+function toInventoryItem(line: StagedLineItem): NewItemInput {
   const now = new Date().toISOString();
   return {
-    id: crypto.randomUUID(),
-    userId,
     name: line.name,
     photoUrl: null,
     quantity: line.quantity,
     dateAdded: now.slice(0, 10),
+    stockKind: "Ingredient",
     location: line.location,
     type: line.type,
-    tags: line.tags,
-    createdAt: now,
-    updatedAt: now
+    tags: line.tags
   };
 }
 
@@ -29,27 +25,14 @@ export function StagingPanel() {
   const queryClient = useQueryClient();
   const [rawText, setRawText] = useState(mockOcrScan());
   const [staged, setStaged] = useState<StagedLineItem[]>(parseReceiptText(mockOcrScan()));
-  const [userId, setUserId] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   const commitMutation = useMutation({
     mutationFn: async () => {
-      const supabase = getSupabaseBrowserClient();
-      if (!supabase) {
-        throw new Error("Supabase keys are missing. Add .env.local keys first.");
-      }
-
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) {
-        throw new Error("Sign in first so items can be attached to your account.");
-      }
-
-      const nextUserId = data.user.id;
-      setUserId(nextUserId);
-      await insertItems(staged.map((line) => toInventoryItem(line, nextUserId)));
+      await insertItems(staged.map((line) => toInventoryItem(line)));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "Ingredient"] });
       setErrorMessage("");
       setRawText("");
       setStaged([]);
@@ -68,7 +51,7 @@ export function StagingPanel() {
     <div className="space-y-6">
       <section className="rounded-lg border border-edge bg-card p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-serif text-2xl">Receipt Staging</h2>
+          <h2 className="font-serif text-2xl">Sourcing</h2>
           <button
             type="button"
             onClick={() => {
@@ -86,6 +69,9 @@ export function StagingPanel() {
           <span className="font-mono text-xs uppercase tracking-[0.15em] text-muted">
             Raw OCR Text
           </span>
+          <p className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted">
+            Receipt parsing commits to Ingredients only.
+          </p>
           <textarea
             value={rawText}
             onChange={(event) => setRawText(event.target.value)}
@@ -107,7 +93,7 @@ export function StagingPanel() {
             onClick={() => commitMutation.mutate()}
             className="rounded border border-text bg-text px-3 py-2 text-xs uppercase tracking-[0.14em] text-canvas transition disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Commit to Inventory
+            Commit to Ingredients
           </button>
         </div>
       </section>
@@ -193,7 +179,6 @@ export function StagingPanel() {
         </div>
 
         {errorMessage && <p className="mt-3 font-mono text-sm text-red-500">{errorMessage}</p>}
-        {userId && <p className="mt-3 font-mono text-xs text-muted">Committed for user: {userId}</p>}
       </section>
     </div>
   );

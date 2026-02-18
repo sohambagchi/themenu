@@ -1,6 +1,7 @@
 export type ItemLocation = "Freezer" | "Pantry" | "Fridge";
 
 export type ItemType = "Protein" | "Carb" | "Veg" | "Ferment/Pickle";
+export type ItemStockKind = "Prepared" | "Ingredient";
 
 export type KnownTag =
   | "Spicy"
@@ -26,11 +27,23 @@ export interface Item {
   photoUrl: string | null;
   quantity: number; // Number of servings
   dateAdded: string; // ISO date string (YYYY-MM-DD)
+  stockKind: ItemStockKind;
   location: ItemLocation;
   type: ItemType;
   tags: TagValue[];
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
+}
+
+export interface NewItemInput {
+  name: string;
+  photoUrl: string | null;
+  quantity: number;
+  dateAdded: string; // ISO date string
+  stockKind: ItemStockKind;
+  location: ItemLocation;
+  type: ItemType;
+  tags: TagValue[];
 }
 
 export interface DbItemRow {
@@ -40,6 +53,7 @@ export interface DbItemRow {
   photo_url: string | null;
   quantity: number;
   date_added: string;
+  stock_kind: ItemStockKind;
   location: ItemLocation;
   type: ItemType;
   tags: string[] | null;

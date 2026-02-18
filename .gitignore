@@ -11,4 +11,4 @@ coverage
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
-supabase/schema.sql
+tsconfig.tsbuildinfo
