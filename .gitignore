@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+dist
+coverage
+.env
+.env.local
+.env.development.local
+.env.production.local
+!.env.example
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+supabase/schema.sql
