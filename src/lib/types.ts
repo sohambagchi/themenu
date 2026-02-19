@@ -1,8 +1,9 @@
 export type ItemLocation = "Freezer" | "Pantry" | "Fridge";
+export type InventoryLabel = "Menu" | "Pantry";
+export type DbItemStockKind = "Prepared" | "Ingredient";
 
 export type KnownItemType = "Protein" | "Carb" | "Veg" | "Ferment/Pickle";
 export type ItemType = KnownItemType | (string & {});
-export type ItemStockKind = "Prepared" | "Ingredient";
 
 export type KnownTag =
   | "Spicy"
@@ -28,7 +29,7 @@ export interface Item {
   photoUrl: string | null;
   quantity: number; // Number of servings
   dateAdded: string; // ISO date string (YYYY-MM-DD)
-  stockKind: ItemStockKind;
+  inventoryLabel: InventoryLabel;
   location: ItemLocation;
   type: ItemType;
   ingredients: string[];
@@ -42,7 +43,7 @@ export interface NewItemInput {
   photoUrl: string | null;
   quantity: number;
   dateAdded: string; // ISO date string
-  stockKind: ItemStockKind;
+  inventoryLabel: InventoryLabel;
   location: ItemLocation;
   type: ItemType;
   ingredients: string[];
@@ -56,7 +57,7 @@ export interface DbItemRow {
   photo_url: string | null;
   quantity: number;
   date_added: string;
-  stock_kind: ItemStockKind;
+  stock_kind: DbItemStockKind;
   location: ItemLocation;
   type: ItemType;
   ingredients: string[] | null;

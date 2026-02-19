@@ -104,7 +104,7 @@ export function MiseEnPlacePanel() {
         photoUrl: photoUrl.trim() || null,
         quantity: Math.max(1, Math.trunc(quantity)),
         dateAdded,
-        stockKind: "Prepared",
+        inventoryLabel: "Menu",
         location,
         type,
         ingredients,
@@ -114,7 +114,7 @@ export function MiseEnPlacePanel() {
       await insertItems([payload], username, password);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory", "Prepared"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "Menu"] });
       setNotice("Menu item added to stock.");
       setName("");
       setPhotoUrl("");

@@ -1,16 +1,12 @@
-import type { Item, ItemStockKind, ItemType, NewItemInput } from "@/lib/types";
-
-function asStockKind(raw: string): ItemStockKind {
-  return raw === "Ingredient" ? "Ingredient" : "Prepared";
-}
+import type { InventoryLabel, Item, ItemType, NewItemInput } from "@/lib/types";
 
 export function toSupabaseTypeLabel(value: string): ItemType {
   const normalized = value.trim();
   return (normalized.length > 0 ? normalized : "Veg") as ItemType;
 }
 
-export async function fetchInventoryItems(stockKind: ItemStockKind) {
-  const response = await fetch(`/api/items?stockKind=${stockKind}`, {
+export async function fetchInventoryItems(inventoryLabel: InventoryLabel) {
+  const response = await fetch(`/api/items?inventoryLabel=${inventoryLabel}`, {
     method: "GET",
     cache: "no-store"
   });
@@ -21,10 +17,7 @@ export async function fetchInventoryItems(stockKind: ItemStockKind) {
   }
 
   const payload = (await response.json()) as { items: Item[] };
-  return (payload.items ?? []).map((item) => ({
-    ...item,
-    stockKind: asStockKind(item.stockKind)
-  }));
+  return payload.items ?? [];
 }
 
 export async function adjustInventoryQuantity(itemId: string, delta: number) {

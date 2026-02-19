@@ -11,7 +11,7 @@ import {
 } from "@/lib/inventoryApi";
 import { getRecommendations } from "@/lib/recommendationEngine";
 import { StyledSelect } from "@/components/styled-select";
-import type { Item, ItemStockKind, ItemType } from "@/lib/types";
+import type { InventoryLabel, Item, ItemType } from "@/lib/types";
 
 const DEFAULT_TYPE_OPTIONS: ItemType[] = ["Protein", "Carb", "Veg", "Ferment/Pickle"];
 
@@ -27,7 +27,7 @@ function formatIngredientSummary(ingredients: string[], limit = 3) {
   return `${shown} +${ingredients.length - limit}`;
 }
 
-export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
+export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }) {
   const queryClient = useQueryClient();
   const [typeFilter, setTypeFilter] = useState<"All" | ItemType>("All");
   const [tagFilter, setTagFilter] = useState<string>("All");
@@ -39,13 +39,13 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
   const [actionPassword, setActionPassword] = useState("");
   const [actionNotice, setActionNotice] = useState("");
 
-  const isIngredientView = stockKind === "Ingredient";
-  const actionLabel = isIngredientView ? "Tray" : "Order";
-  const actionVerb = isIngredientView ? "Cooked" : "Eat";
+  const isPantryView = inventoryLabel === "Pantry";
+  const actionLabel = isPantryView ? "Tray" : "Order";
+  const actionVerb = isPantryView ? "Cooked" : "Eat";
 
   const inventoryQuery = useQuery({
-    queryKey: ["inventory", stockKind],
-    queryFn: () => fetchInventoryItems(stockKind)
+    queryKey: ["inventory", inventoryLabel],
+    queryFn: () => fetchInventoryItems(inventoryLabel)
   });
 
   const sessionQuery = useQuery({
@@ -62,10 +62,10 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
   const adjustMutation = useMutation({
     mutationFn: ({ id, delta }: { id: string; delta: number }) => adjustInventoryQuantity(id, delta),
     onMutate: async ({ id, delta }) => {
-      await queryClient.cancelQueries({ queryKey: ["inventory", stockKind] });
-      const previousItems = queryClient.getQueryData<Item[]>(["inventory", stockKind]);
+      await queryClient.cancelQueries({ queryKey: ["inventory", inventoryLabel] });
+      const previousItems = queryClient.getQueryData<Item[]>(["inventory", inventoryLabel]);
 
-      queryClient.setQueryData<Item[]>(["inventory", stockKind], (current = []) =>
+      queryClient.setQueryData<Item[]>(["inventory", inventoryLabel], (current = []) =>
         current
           .map((item) =>
             item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
@@ -77,11 +77,11 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
     },
     onError: (_error, _variables, context) => {
       if (context?.previousItems) {
-        queryClient.setQueryData(["inventory", stockKind], context.previousItems);
+        queryClient.setQueryData(["inventory", inventoryLabel], context.previousItems);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory", stockKind] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", inventoryLabel] });
     }
   });
 
@@ -101,7 +101,7 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
       setActionPassword("");
       setAuthPromptOpen(false);
       setActionNotice(`${actionVerb} complete. Stock updated.`);
-      queryClient.invalidateQueries({ queryKey: ["inventory", stockKind] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", inventoryLabel] });
     },
     onError: (error) => {
       setActionNotice(error instanceof Error ? error.message : "Failed to update stock.");
@@ -141,9 +141,9 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
   );
 
   const recommendations = useMemo(() => {
-    if (!selectedItem || stockKind !== "Prepared") return [];
+    if (!selectedItem || inventoryLabel !== "Menu") return [];
     return getRecommendations(selectedItem, items);
-  }, [selectedItem, items, stockKind]);
+  }, [selectedItem, items, inventoryLabel]);
 
   const actionItems = useMemo<ActionItem[]>(() => {
     const entries: ActionItem[] = [];
@@ -328,10 +328,10 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
       <section className="rounded-lg border border-edge bg-card p-5">
         <div className="mb-5">
           <h2 className="font-serif text-2xl">
-            {stockKind === "Prepared" ? "Menu" : "Pantry"}
+            {inventoryLabel}
           </h2>
           <p className="mt-1 font-mono text-xs uppercase tracking-[0.14em] text-muted">
-            {stockKind === "Prepared"
+            {inventoryLabel === "Menu"
               ? "Finished dishes and batch-cooked meals."
               : "Raw inventory from groceries and pantry restock."}
           </p>
@@ -373,7 +373,7 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
           </p>
         )}
 
-        <div className={isIngredientView ? "space-y-3" : "grid gap-4 sm:grid-cols-2 xl:grid-cols-3"}>
+        <div className={isPantryView ? "space-y-3" : "grid gap-4 sm:grid-cols-2 xl:grid-cols-3"}>
           {filteredItems.map((item) => (
             <article
               key={item.id}
@@ -381,7 +381,7 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
                 selectedItemId === item.id ? "border-text shadow-card" : "border-edge"
               }`}
             >
-              {!isIngredientView && (
+              {!isPantryView && (
                 <div className="relative h-36 w-full bg-black/10">
                   {item.photoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -394,13 +394,13 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
                 </div>
               )}
 
-              <div className={`${isIngredientView ? "space-y-3" : "space-y-4"} p-4`}>
+              <div className={`${isPantryView ? "space-y-3" : "space-y-4"} p-4`}>
                 <div>
                   <h3 className="font-serif text-xl">{item.name}</h3>
                   <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
                     {item.type} • {item.location}
                   </p>
-                  {!isIngredientView && item.ingredients.length > 0 && (
+                  {!isPantryView && item.ingredients.length > 0 && (
                     <p className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted">
                       Ingredients: {formatIngredientSummary(item.ingredients)}
                     </p>
@@ -439,7 +439,7 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
                   >
                     Add to {actionLabel}
                   </button>
-                  {stockKind === "Prepared" && (
+                  {inventoryLabel === "Menu" && (
                     <button
                       type="button"
                       onClick={() => setSelectedItemId(item.id)}
@@ -455,7 +455,7 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
         </div>
       </section>
 
-      {stockKind === "Prepared" && (
+      {inventoryLabel === "Menu" && (
         <section className="rounded-lg border border-edge bg-card p-5">
           <h2 className="font-serif text-2xl">Pairing</h2>
           {!selectedItem && (

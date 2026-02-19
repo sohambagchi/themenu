@@ -22,7 +22,7 @@ If you are not logged in, Mise en Place shows an inline username/password prompt
 
 During cooking/consumption:
 - On Pantry, add items to `Tray`, then click `Cooked`.
-- On Prepared foods, add items to `Order`, then click `Eat`.
+- On Menu, add items to `Order`, then click `Eat`.
 - If you are already logged in, stock updates immediately. If not, a username/password prompt appears.
 - Manual +/- stock adjustments require an active dashboard login.
 
@@ -60,9 +60,9 @@ Open `http://localhost:3000`.
 
 ## 4) Routes
 
-- `/`: Prepared foods inventory
+- `/`: Menu inventory
 - `/ingredients`: Pantry inventory
 - `/sourcing`: Receipt sourcing flow (commits to Pantry inventory only)
-- `/mise-en-place`: Add finished items to Prepared inventory
+- `/mise-en-place`: Add finished items to Menu inventory
 - `/login`: Static username/password entry
 - `/api/uploads/image`: authenticated image upload endpoint (used by Mise en Place)

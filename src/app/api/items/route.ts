@@ -7,11 +7,16 @@ import {
   requireDashboardSession
 } from "@/lib/dashboardAuth";
 import { normalizeNewItemInputList } from "@/lib/itemValidation";
+import {
+  dbStockKindToInventoryLabel,
+  inventoryLabelToDbStockKind,
+  parseInventoryLabel
+} from "@/lib/inventoryLabels";
 import { isAllowedRequestOrigin } from "@/lib/origin";
 import { getRequestIp } from "@/lib/requestMeta";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { DbItemRow, Item, ItemStockKind, NewItemInput, TagValue } from "@/lib/types";
+import type { DbItemRow, Item, NewItemInput, TagValue } from "@/lib/types";
 
 function rowToItem(row: DbItemRow): Item {
   return {
@@ -21,7 +26,7 @@ function rowToItem(row: DbItemRow): Item {
     photoUrl: row.photo_url,
     quantity: row.quantity,
     dateAdded: row.date_added,
-    stockKind: row.stock_kind,
+    inventoryLabel: dbStockKindToInventoryLabel(row.stock_kind),
     location: row.location,
     type: row.type,
     ingredients: row.ingredients ?? [],
@@ -38,16 +43,12 @@ function itemToInsertRow(item: NewItemInput, ownerUserId: string) {
     photo_url: item.photoUrl,
     quantity: Math.max(0, Math.trunc(item.quantity)),
     date_added: item.dateAdded,
-    stock_kind: item.stockKind,
+    stock_kind: inventoryLabelToDbStockKind(item.inventoryLabel),
     location: item.location,
     type: item.type,
     ingredients: item.ingredients ?? [],
     tags: item.tags
   };
-}
-
-function toStockKind(raw: string | null): ItemStockKind {
-  return raw === "Ingredient" ? "Ingredient" : "Prepared";
 }
 
 export async function GET(request: Request) {
@@ -68,13 +69,27 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const stockKind = toStockKind(searchParams.get("stockKind"));
+  if (searchParams.has("stockKind") && !searchParams.has("inventoryLabel")) {
+    return NextResponse.json(
+      { error: "stockKind is deprecated. Use inventoryLabel=Menu|Pantry." },
+      { status: 410 }
+    );
+  }
 
-  let query = supabase
+  const inventoryLabel = parseInventoryLabel(searchParams.get("inventoryLabel"));
+  if (!inventoryLabel) {
+    return NextResponse.json(
+      { error: "inventoryLabel must be either Menu or Pantry." },
+      { status: 400 }
+    );
+  }
+  const dbStockKind = inventoryLabelToDbStockKind(inventoryLabel);
+
+  const query = supabase
     .from("items")
     .select("*")
     .eq("user_id", ownerUserId)
-    .eq("stock_kind", stockKind)
+    .eq("stock_kind", dbStockKind)
     .gt("quantity", 0);
 
   const { data, error } = await query.order("date_added", { ascending: false });

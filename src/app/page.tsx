@@ -1,5 +1,5 @@
 import { Dashboard } from "@/components/dashboard";
 
 export default function HomePage() {
-  return <Dashboard stockKind="Prepared" />;
+  return <Dashboard inventoryLabel="Menu" />;
 }

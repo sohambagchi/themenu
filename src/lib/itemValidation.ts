@@ -1,7 +1,7 @@
-import type { ItemLocation, ItemStockKind, NewItemInput, TagValue } from "@/lib/types";
+import type { ItemLocation, NewItemInput, TagValue } from "@/lib/types";
+import { parseInventoryLabel } from "@/lib/inventoryLabels";
 
 const VALID_LOCATIONS = new Set<ItemLocation>(["Freezer", "Pantry", "Fridge"]);
-const VALID_STOCK_KINDS = new Set<ItemStockKind>(["Prepared", "Ingredient"]);
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const MAX_ITEMS_PER_REQUEST = 100;
@@ -57,7 +57,7 @@ function normalizeItem(raw: unknown): NewItemInput | null {
   const row = raw as Record<string, unknown>;
   const name = normalizeText(row.name).slice(0, MAX_NAME_LENGTH);
   const type = normalizeText(row.type).slice(0, MAX_TYPE_LENGTH);
-  const stockKind = normalizeText(row.stockKind) as ItemStockKind;
+  const inventoryLabel = parseInventoryLabel(row.inventoryLabel);
   const location = normalizeText(row.location) as ItemLocation;
   const dateAdded = normalizeText(row.dateAdded);
   const quantity = Math.trunc(Number(row.quantity ?? 0));
@@ -67,7 +67,7 @@ function normalizeItem(raw: unknown): NewItemInput | null {
 
   if (!name) return null;
   if (!type) return null;
-  if (!VALID_STOCK_KINDS.has(stockKind)) return null;
+  if (!inventoryLabel) return null;
   if (!VALID_LOCATIONS.has(location)) return null;
   if (!isValidIsoDate(dateAdded)) return null;
   if (!Number.isFinite(quantity) || quantity < 1 || quantity > 5000) return null;
@@ -78,7 +78,7 @@ function normalizeItem(raw: unknown): NewItemInput | null {
     photoUrl,
     quantity,
     dateAdded,
-    stockKind,
+    inventoryLabel,
     location,
     type,
     ingredients,
@@ -104,6 +104,18 @@ export function normalizeNewItemInputList(raw: unknown) {
 
   const normalized: NewItemInput[] = [];
   for (const item of raw) {
+    if (
+      item &&
+      typeof item === "object" &&
+      "stockKind" in (item as Record<string, unknown>) &&
+      !("inventoryLabel" in (item as Record<string, unknown>))
+    ) {
+      return {
+        ok: false as const,
+        error: "stockKind is deprecated. Use inventoryLabel=Menu|Pantry."
+      };
+    }
+
     const next = normalizeItem(item);
     if (!next) {
       return { ok: false as const, error: "One or more items are invalid." };

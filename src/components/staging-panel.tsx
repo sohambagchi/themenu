@@ -15,7 +15,7 @@ function toInventoryItem(line: StagedLineItem): NewItemInput {
     photoUrl: null,
     quantity: line.quantity,
     dateAdded: now.slice(0, 10),
-    stockKind: "Ingredient",
+    inventoryLabel: "Pantry",
     location: line.location,
     type: line.type,
     ingredients: [],
@@ -34,7 +34,7 @@ export function StagingPanel() {
       await insertItems(staged.map((line) => toInventoryItem(line)));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory", "Ingredient"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "Pantry"] });
       setErrorMessage("");
       setRawText("");
       setStaged([]);
