@@ -9,8 +9,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 const NAV_LINKS = [
   { href: "/", label: "Menu" },
   { href: "/ingredients", label: "Pantry" },
-  { href: "/sourcing", label: "Sourcing" },
-  { href: "/mise-en-place", label: "Mise en Place" }
+  { href: "/sourcing", label: "Sourcing", requiresAuth: true },
+  { href: "/mise-en-place", label: "Mise en Place", requiresAuth: true }
 ];
 
 function navLinkClass(active: boolean) {
@@ -24,6 +24,7 @@ function navLinkClass(active: boolean) {
 export function HeaderNav({ isAuthed }: { isAuthed: boolean }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const visibleLinks = NAV_LINKS.filter((link) => !link.requiresAuth || isAuthed);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -33,7 +34,7 @@ export function HeaderNav({ isAuthed }: { isAuthed: boolean }) {
     <div className="w-full md:w-auto">
       <div className="hidden items-center gap-2 md:flex">
         <nav className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.15em]">
-          {NAV_LINKS.map((link) => (
+          {visibleLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -80,7 +81,7 @@ export function HeaderNav({ isAuthed }: { isAuthed: boolean }) {
         {mobileOpen && (
           <div id="mobile-nav-panel" className="mt-3 rounded-lg border border-edge bg-card p-3">
             <nav className="grid gap-2 font-mono text-xs uppercase tracking-[0.15em]">
-              {NAV_LINKS.map((link) => (
+              {visibleLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}

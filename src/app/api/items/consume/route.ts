@@ -96,17 +96,16 @@ export async function POST(request: Request) {
   const ids = operations.map((operation) => operation.id);
   const { data: rows, error: readError } = await supabase
     .from("items")
-    .select("id,quantity,stock_kind")
+    .select("id,quantity")
     .eq("user_id", ownerUserId)
     .in("id", ids);
 
   if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
 
-  const quantityById = new Map<string, { quantity: number; stockKind: string }>();
+  const quantityById = new Map<string, { quantity: number }>();
   for (const row of rows ?? []) {
     quantityById.set(String((row as { id: string }).id), {
-      quantity: Number((row as { quantity: number }).quantity),
-      stockKind: String((row as { stock_kind: string }).stock_kind)
+      quantity: Number((row as { quantity: number }).quantity)
     });
   }
 
@@ -124,7 +123,7 @@ export async function POST(request: Request) {
     if (!current) continue;
     const next = Math.max(0, current.quantity - operation.quantity);
 
-    if (current.stockKind === "Ingredient" && next === 0) {
+    if (next === 0) {
       const { error: deleteError } = await supabase
         .from("items")
         .delete()

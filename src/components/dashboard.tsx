@@ -66,9 +66,11 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
       const previousItems = queryClient.getQueryData<Item[]>(["inventory", stockKind]);
 
       queryClient.setQueryData<Item[]>(["inventory", stockKind], (current = []) =>
-        current.map((item) =>
-          item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
-        )
+        current
+          .map((item) =>
+            item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
+          )
+          .filter((item) => item.quantity > 0)
       );
 
       return { previousItems };
@@ -194,6 +196,135 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
 
   return (
     <div className="space-y-8">
+      <section className="rounded-lg border border-edge bg-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-serif text-2xl">{actionLabel}</h2>
+          <p className="font-mono text-xs uppercase tracking-[0.14em] text-muted">
+            Items: {actionItems.length} • Servings: {actionTotal}
+          </p>
+        </div>
+
+        {actionItems.length === 0 ? (
+          <p className="mt-3 font-mono text-sm text-muted">
+            Select items from inventory to prepare your {actionLabel.toLowerCase()}.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {actionItems.map((row) => (
+              <article
+                key={row.item.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded border border-edge bg-canvas p-3"
+              >
+                <div>
+                  <p className="font-serif text-lg">{row.item.name}</p>
+                  <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
+                    Available: {row.item.quantity}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateActionQuantity(row.item.id, row.quantity - 1)}
+                    className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
+                  >
+                    -
+                  </button>
+                  <span className="min-w-8 text-center font-mono text-sm">{row.quantity}</span>
+                  <button
+                    type="button"
+                    onClick={() => updateActionQuantity(row.item.id, row.quantity + 1)}
+                    className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
+                  >
+                    +
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={actionItems.length === 0}
+            onClick={() => {
+              setActionNotice("");
+              if (sessionQuery.data?.authed) {
+                submitAction();
+                return;
+              }
+
+              setAuthPromptOpen(true);
+            }}
+            className="rounded border border-text bg-text px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-canvas disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {actionVerb}
+          </button>
+          <button
+            type="button"
+            disabled={actionItems.length === 0}
+            onClick={() => {
+              setActionMap({});
+              setActionNotice("");
+            }}
+            className="rounded border border-edge px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-muted transition hover:border-text hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Clear {actionLabel}
+          </button>
+        </div>
+
+        {authPromptOpen && (
+          <form
+            className="mt-4 grid gap-3 rounded border border-edge bg-canvas p-4 md:grid-cols-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitAction(actionUsername, actionPassword);
+            }}
+          >
+            <label className="block">
+              <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Username</span>
+              <input
+                value={actionUsername}
+                onChange={(event) => setActionUsername(event.target.value)}
+                required
+                className="mt-2 w-full rounded border border-edge bg-card px-3 py-2 text-sm outline-none transition focus:border-text"
+              />
+            </label>
+
+            <label className="block">
+              <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Password</span>
+              <input
+                value={actionPassword}
+                onChange={(event) => setActionPassword(event.target.value)}
+                type="password"
+                required
+                className="mt-2 w-full rounded border border-edge bg-card px-3 py-2 text-sm outline-none transition focus:border-text"
+              />
+            </label>
+
+            <div className="flex items-end gap-2">
+              <button
+                type="submit"
+                disabled={consumeMutation.isPending}
+                className="rounded border border-text bg-text px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-canvas disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Confirm {actionVerb}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthPromptOpen(false)}
+                className="rounded border border-edge px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-muted transition hover:border-text hover:text-text"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {actionNotice && <p className="mt-3 font-mono text-sm text-muted">{actionNotice}</p>}
+      </section>
+
       <section className="rounded-lg border border-edge bg-card p-5">
         <div className="mb-5">
           <h2 className="font-serif text-2xl">
@@ -323,135 +454,6 @@ export function Dashboard({ stockKind }: { stockKind: ItemStockKind }) {
           ))}
         </div>
       </section>
-
-      <section className="rounded-lg border border-edge bg-card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-serif text-2xl">{actionLabel}</h2>
-          <p className="font-mono text-xs uppercase tracking-[0.14em] text-muted">
-            Items: {actionItems.length} • Servings: {actionTotal}
-          </p>
-        </div>
-
-        {actionItems.length === 0 ? (
-          <p className="mt-3 font-mono text-sm text-muted">
-            Select items from inventory to prepare your {actionLabel.toLowerCase()}.
-          </p>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {actionItems.map((row) => (
-              <article
-                key={row.item.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded border border-edge bg-canvas p-3"
-              >
-                <div>
-                  <p className="font-serif text-lg">{row.item.name}</p>
-                  <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
-                    Available: {row.item.quantity}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => updateActionQuantity(row.item.id, row.quantity - 1)}
-                    className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
-                  >
-                    -
-                  </button>
-                  <span className="min-w-8 text-center font-mono text-sm">{row.quantity}</span>
-                  <button
-                    type="button"
-                    onClick={() => updateActionQuantity(row.item.id, row.quantity + 1)}
-                    className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
-                  >
-                    +
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={actionItems.length === 0}
-            onClick={() => {
-              setActionNotice("");
-              if (sessionQuery.data?.authed) {
-                submitAction();
-                return;
-              }
-
-              setAuthPromptOpen(true);
-            }}
-            className="rounded border border-text bg-text px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-canvas disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {actionVerb}
-          </button>
-          <button
-            type="button"
-            disabled={actionItems.length === 0}
-            onClick={() => {
-              setActionMap({});
-              setActionNotice("");
-            }}
-            className="rounded border border-edge px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-muted transition hover:border-text hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Clear {actionLabel}
-          </button>
-        </div>
-
-        {authPromptOpen && (
-          <form
-            className="mt-4 grid gap-3 rounded border border-edge bg-canvas p-4 md:grid-cols-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              submitAction(actionUsername, actionPassword);
-            }}
-          >
-            <label className="block">
-              <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Username</span>
-              <input
-                value={actionUsername}
-                onChange={(event) => setActionUsername(event.target.value)}
-                required
-                className="mt-2 w-full rounded border border-edge bg-card px-3 py-2 text-sm outline-none transition focus:border-text"
-              />
-            </label>
-
-            <label className="block">
-              <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Password</span>
-              <input
-                value={actionPassword}
-                onChange={(event) => setActionPassword(event.target.value)}
-                type="password"
-                required
-                className="mt-2 w-full rounded border border-edge bg-card px-3 py-2 text-sm outline-none transition focus:border-text"
-              />
-            </label>
-
-            <div className="flex items-end gap-2">
-              <button
-                type="submit"
-                disabled={consumeMutation.isPending}
-                className="rounded border border-text bg-text px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-canvas disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Confirm {actionVerb}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthPromptOpen(false)}
-                className="rounded border border-edge px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-muted transition hover:border-text hover:text-text"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-
-      {actionNotice && <p className="mt-3 font-mono text-sm text-muted">{actionNotice}</p>}
-    </section>
 
       {stockKind === "Prepared" && (
         <section className="rounded-lg border border-edge bg-card p-5">

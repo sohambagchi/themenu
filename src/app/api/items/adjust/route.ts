@@ -37,17 +37,15 @@ export async function POST(request: Request) {
 
   const { data: row, error: readError } = await supabase
     .from("items")
-    .select("quantity,stock_kind")
+    .select("quantity")
     .eq("id", id)
     .eq("user_id", ownerUserId)
     .single();
 
   if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
 
-  const isIngredient = String((row as { stock_kind: string }).stock_kind) === "Ingredient";
-
   const nextQty = Math.max(0, Number(row.quantity) + delta);
-  if (isIngredient && nextQty === 0) {
+  if (nextQty === 0) {
     const { error: deleteError } = await supabase
       .from("items")
       .delete()

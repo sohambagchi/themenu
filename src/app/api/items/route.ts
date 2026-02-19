@@ -74,11 +74,8 @@ export async function GET(request: Request) {
     .from("items")
     .select("*")
     .eq("user_id", ownerUserId)
-    .eq("stock_kind", stockKind);
-
-  if (stockKind === "Ingredient") {
-    query = query.gt("quantity", 0);
-  }
+    .eq("stock_kind", stockKind)
+    .gt("quantity", 0);
 
   const { data, error } = await query.order("date_added", { ascending: false });
 
