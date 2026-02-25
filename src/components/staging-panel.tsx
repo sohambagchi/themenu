@@ -22,6 +22,9 @@ import type {
 } from "@/lib/types";
 
 const SOURCING_SOURCE = "walmart";
+const DEFAULT_TYPE_OPTIONS: ItemType[] = ["Protein", "Carb", "Veg", "Ferment/Pickle"];
+const CUSTOM_TYPES_STORAGE_KEY = "themenu_custom_sourcing_types";
+const MAX_TYPE_LENGTH = 64;
 
 function toInventoryItem(line: StagedLineItem): NewItemInput {
   const now = new Date().toISOString();
@@ -47,10 +50,20 @@ export function StagingPanel() {
     parseReceiptText(mockOcrScan(), [], SOURCING_SOURCE)
   );
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [customTypes, setCustomTypes] = useState<string[]>([]);
+  const [customTypeInput, setCustomTypeInput] = useState("");
 
   const conversionQuery = useQuery({
     queryKey: ["sourcing-conversions", SOURCING_SOURCE],
     queryFn: () => fetchSourcingConversionRules(SOURCING_SOURCE)
+  });
+  const sessionQuery = useQuery({
+    queryKey: ["dashboard-session"],
+    queryFn: async () => {
+      const response = await fetch("/api/dashboard-auth/session", { cache: "no-store" });
+      if (!response.ok) return { authed: false };
+      return (await response.json()) as { authed: boolean };
+    }
   });
 
   const parseWithCurrentRules = (text: string, rules?: SourcingConversionRule[]) => {
@@ -65,11 +78,64 @@ export function StagingPanel() {
     );
   };
 
+  const addCustomType = () => {
+    const normalized = customTypeInput.trim();
+    if (!normalized) return;
+
+    if (normalized.length > MAX_TYPE_LENGTH) {
+      setErrorMessage(`Type must be ${MAX_TYPE_LENGTH} characters or fewer.`);
+      return;
+    }
+
+    setCustomTypes((current) => {
+      const normalizedLower = normalized.toLowerCase();
+      const existsInDefaults = DEFAULT_TYPE_OPTIONS.some(
+        (value) => value.toLowerCase() === normalizedLower
+      );
+      const existsInCustom = current.some((value) => value.toLowerCase() === normalizedLower);
+      if (existsInDefaults || existsInCustom) return current;
+      return [...current, normalized];
+    });
+
+    setCustomTypeInput("");
+    setErrorMessage("");
+  };
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(CUSTOM_TYPES_STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as string[];
+      if (!Array.isArray(parsed)) return;
+      setCustomTypes(
+        parsed.filter(
+          (entry) =>
+            typeof entry === "string" &&
+            entry.trim().length > 0 &&
+            entry.trim().length <= MAX_TYPE_LENGTH
+        )
+      );
+    } catch {
+      // Ignore invalid local storage value.
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(CUSTOM_TYPES_STORAGE_KEY, JSON.stringify(customTypes));
+  }, [customTypes]);
+
   useEffect(() => {
     if (!conversionQuery.data) return;
     parseWithCurrentRules(rawText, conversionQuery.data);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversionQuery.data]);
+
+  const allTypeOptions = useMemo(() => {
+    const set = new Set<string>(DEFAULT_TYPE_OPTIONS);
+    for (const value of customTypes) set.add(value);
+    for (const line of staged) set.add(line.type);
+    return Array.from(set);
+  }, [customTypes, staged]);
 
   const resolvedStaged = useMemo(
     () => staged.filter((line) => line.parseState === "resolved"),
@@ -236,6 +302,29 @@ export function StagingPanel() {
           </p>
         </div>
 
+        {sessionQuery.data?.authed && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            <input
+              value={customTypeInput}
+              onChange={(event) => setCustomTypeInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                addCustomType();
+              }}
+              className="w-full rounded border border-edge bg-canvas px-3 py-2 text-sm outline-none transition focus:border-text md:max-w-sm"
+              placeholder="Add custom type"
+            />
+            <button
+              type="button"
+              onClick={addCustomType}
+              className="rounded border border-edge px-3 py-2 text-xs uppercase tracking-[0.14em] text-muted transition hover:border-text hover:text-text"
+            >
+              Add Type
+            </button>
+          </div>
+        )}
+
         <div className="space-y-3">
           {needsReviewStaged.map((line) => (
             <article key={line.id} className="space-y-2 rounded border border-edge bg-canvas p-3">
@@ -257,7 +346,7 @@ export function StagingPanel() {
                   className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
                 />
 
-                <div className="flex overflow-hidden rounded border border-edge bg-card">
+                <div className="flex rounded border border-edge bg-card">
                   <input
                     type="text"
                     value={formatQuantityValue(line.quantity)}
@@ -292,7 +381,7 @@ export function StagingPanel() {
                       )
                     )
                   }
-                  options={["Protein", "Carb", "Veg", "Ferment/Pickle"]}
+                  options={allTypeOptions}
                   buttonClassName="bg-card px-2 py-1"
                   ariaLabel="Ingredient type"
                 />
@@ -350,7 +439,7 @@ export function StagingPanel() {
                 className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
               />
 
-                <div className="flex overflow-hidden rounded border border-edge bg-card">
+                <div className="flex rounded border border-edge bg-card">
                   <input
                     type="text"
                     value={formatQuantityValue(line.quantity)}
@@ -385,7 +474,7 @@ export function StagingPanel() {
                     )
                   )
                 }
-                options={["Protein", "Carb", "Veg", "Ferment/Pickle"]}
+                options={allTypeOptions}
                 buttonClassName="bg-card px-2 py-1"
                 ariaLabel="Ingredient type"
               />
