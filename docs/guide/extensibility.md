@@ -30,6 +30,20 @@
 - Keep scoring deterministic and side-effect free.
 - If moving to DB-driven rules, reuse `pairing_rules` table and keep fallback behavior explicit.
 
+## Sourcing parser and conversion rules
+- Sourcing receipt parsing must stay deterministic; do not add probabilistic inference or LLM calls.
+- Parser entrypoint: `src/lib/staging.ts::parseReceiptText`.
+- For Walmart receipts, parse the item block immediately before `Shopped|Weight-adjusted|Unavailable Qty N`.
+- Compute effective quantity as `line qty * embedded pack/count multiplier`.
+- Hash matching key is derived from normalized tokens (`tokenKey`, `tokenHash` from `tokenizeReceiptName`).
+- Confirmed conversions are persisted in `public.sourcing_conversion_rules` through:
+  - `GET /api/sourcing/conversions?source=<source>`
+  - `POST /api/sourcing/conversions` (upsert by `(source, token_hash)`)
+- Staging UI contract:
+  - `resolved`: committable rows
+  - `needs_review`: manual edit + `Confirm Mapping`
+  - `ignored`: non-committable rows (e.g., unavailable lines)
+
 ## Testing workflow notes
 - Current repo has no committed ESLint config, so `next lint` may prompt interactively.
 - Use `bunx tsc --noEmit` for non-interactive type checks in CI-like shell sessions.

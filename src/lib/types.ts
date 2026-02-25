@@ -17,6 +17,8 @@ export type KnownTag =
   | "Gravy";
 
 export type TagValue = KnownTag | (string & {});
+export type SourcingParseState = "resolved" | "needs_review" | "ignored";
+export type ReceiptLineStatus = "shopped" | "weight_adjusted" | "unavailable";
 
 export interface Tag {
   value: TagValue;
@@ -86,9 +88,62 @@ export interface RecommendationResult {
 
 export interface StagedLineItem {
   id: string;
+  source: string;
+  rawLine: string;
+  rawName: string;
   name: string;
   quantity: number;
+  lineQuantity: number;
+  embeddedPackCount: number;
+  effectiveQuantity: number;
+  tokenKey: string;
+  tokenHash: string;
+  status: ReceiptLineStatus;
+  parseState: SourcingParseState;
+  parseWarnings: string[];
+  matchedRuleId: string | null;
   location: ItemLocation;
   type: ItemType;
   tags: TagValue[];
+}
+
+export interface SourcingConversionRule {
+  id: string;
+  source: string;
+  tokenKey: string;
+  tokenHash: string;
+  canonicalName: string;
+  canonicalType: ItemType;
+  canonicalLocation: ItemLocation;
+  canonicalTags: TagValue[];
+  embeddedMultiplierOverride: number | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SourcingConversionRuleInput {
+  source: string;
+  tokenKey: string;
+  tokenHash: string;
+  canonicalName: string;
+  canonicalType: ItemType;
+  canonicalLocation: ItemLocation;
+  canonicalTags: TagValue[];
+  embeddedMultiplierOverride: number | null;
+}
+
+export interface DbSourcingConversionRuleRow {
+  id: string;
+  source: string;
+  token_key: string;
+  token_hash: string;
+  canonical_name: string;
+  canonical_type: ItemType;
+  canonical_location: ItemLocation;
+  canonical_tags: string[] | null;
+  embedded_multiplier_override: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }

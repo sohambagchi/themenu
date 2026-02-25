@@ -21,6 +21,7 @@
 - `src/app/api/items/route.ts`: list/insert inventory items
 - `src/app/api/items/adjust/route.ts`: +/- quantity update (session required)
 - `src/app/api/items/consume/route.ts`: batch consume and delete-on-zero
+- `src/app/api/sourcing/conversions/route.ts`: deterministic conversion rule lookup + upsert
 - `src/app/api/uploads/image/route.ts`: authenticated image upload with MIME sniffing
 - `src/app/api/dashboard-auth/login/route.ts`: create session cookie
 - `src/app/api/dashboard-auth/logout/route.ts`: clear session cookie
@@ -41,7 +42,8 @@
 - `src/lib/inventoryApi.ts`: browser API wrappers
 - `src/lib/itemValidation.ts`: POST `/api/items` payload normalization
 - `src/lib/recommendationEngine.ts`: deterministic pairing scoring
-- `src/lib/staging.ts`: mock OCR + receipt parser
+- `src/lib/staging.ts`: deterministic receipt parser + tokenization/hash helpers
+- `src/lib/sourcingApi.ts`: browser wrappers for sourcing conversion rules API
 - `src/lib/dashboardAuth.ts`: credentials, session signing/verification
 - `src/lib/origin.ts`: same-origin validator
 - `src/lib/requestMeta.ts`: client IP extraction

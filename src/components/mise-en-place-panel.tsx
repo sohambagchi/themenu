@@ -244,7 +244,22 @@ export function MiseEnPlacePanel() {
         <label className="block">
           <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Servings</span>
           <div className="mt-2 flex overflow-hidden rounded border border-edge bg-canvas">
-            <div className="flex w-10 flex-col border-r border-edge">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={quantityInput}
+              onChange={(event) => {
+                const nextValue = event.target.value.trim();
+                if (!nextValue) {
+                  setQuantityInput("");
+                  return;
+                }
+                if (!/^\d+$/.test(nextValue)) return;
+                setQuantityInput(nextValue);
+              }}
+              className="w-full bg-canvas px-3 py-2 text-sm outline-none transition focus:border-text"
+            />
+            <div className="flex w-10 flex-col border-l border-edge">
               <button
                 type="button"
                 onClick={() => stepServings(1)}
@@ -263,21 +278,6 @@ export function MiseEnPlacePanel() {
                 v
               </button>
             </div>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={quantityInput}
-              onChange={(event) => {
-                const nextValue = event.target.value.trim();
-                if (!nextValue) {
-                  setQuantityInput("");
-                  return;
-                }
-                if (!/^\d+$/.test(nextValue)) return;
-                setQuantityInput(nextValue);
-              }}
-              className="w-full bg-canvas px-3 py-2 text-sm outline-none transition focus:border-text"
-            />
           </div>
         </label>
 
