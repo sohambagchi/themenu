@@ -52,6 +52,7 @@ export function StagingPanel() {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [customTypes, setCustomTypes] = useState<string[]>([]);
   const [customTypeInput, setCustomTypeInput] = useState("");
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
 
   const conversionQuery = useQuery({
     queryKey: ["sourcing-conversions", SOURCING_SOURCE],
@@ -71,11 +72,21 @@ export function StagingPanel() {
   };
 
   const onStagedQuantityInput = (lineId: string, rawValue: string) => {
+    setQuantityDrafts((current) => ({ ...current, [lineId]: rawValue }));
     const parsed = parseQuantityInput(rawValue);
     if (parsed === null || parsed <= 0) return;
     setStaged((current) =>
       current.map((entry) => (entry.id === lineId ? { ...entry, quantity: parsed } : entry))
     );
+  };
+
+  const onStagedQuantityBlur = (lineId: string) => {
+    const line = staged.find((entry) => entry.id === lineId);
+    if (!line) return;
+    setQuantityDrafts((current) => ({
+      ...current,
+      [lineId]: formatQuantityValue(line.quantity)
+    }));
   };
 
   const addCustomType = () => {
@@ -130,12 +141,29 @@ export function StagingPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversionQuery.data]);
 
+  useEffect(() => {
+    setQuantityDrafts((current) => {
+      const next: Record<string, string> = {};
+      for (const line of staged) {
+        next[line.id] = current[line.id] ?? formatQuantityValue(line.quantity);
+      }
+      return next;
+    });
+  }, [staged]);
+
   const allTypeOptions = useMemo(() => {
     const set = new Set<string>(DEFAULT_TYPE_OPTIONS);
     for (const value of customTypes) set.add(value);
     for (const line of staged) set.add(line.type);
     return Array.from(set);
   }, [customTypes, staged]);
+
+  const onStagedTypeInput = (lineId: string, rawValue: string) => {
+    const normalized = rawValue.slice(0, MAX_TYPE_LENGTH);
+    setStaged((current) =>
+      current.map((item) => (item.id === lineId ? { ...item, type: normalized as ItemType } : item))
+    );
+  };
 
   const resolvedStaged = useMemo(
     () => staged.filter((line) => line.parseState === "resolved"),
@@ -349,8 +377,9 @@ export function StagingPanel() {
                 <div className="flex rounded border border-edge bg-card">
                   <input
                     type="text"
-                    value={formatQuantityValue(line.quantity)}
+                    value={quantityDrafts[line.id] ?? formatQuantityValue(line.quantity)}
                     onChange={(event) => onStagedQuantityInput(line.id, event.target.value)}
+                    onBlur={() => onStagedQuantityBlur(line.id)}
                     className="w-full bg-card px-2 py-1 text-sm outline-none"
                   />
                   <div className="min-w-[88px] border-l border-edge">
@@ -372,19 +401,36 @@ export function StagingPanel() {
                   </div>
                 </div>
 
-                <StyledSelect
-                  value={line.type}
-                  onChange={(nextValue) =>
-                    setStaged((current) =>
-                      current.map((item) =>
-                        item.id === line.id ? { ...item, type: nextValue as ItemType } : item
+                {sessionQuery.data?.authed ? (
+                  <>
+                    <input
+                      value={line.type}
+                      list={`staging-type-options-${line.id}`}
+                      onChange={(event) => onStagedTypeInput(line.id, event.target.value)}
+                      className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
+                      placeholder="Ingredient type"
+                    />
+                    <datalist id={`staging-type-options-${line.id}`}>
+                      {allTypeOptions.map((option) => (
+                        <option key={option} value={option} />
+                      ))}
+                    </datalist>
+                  </>
+                ) : (
+                  <StyledSelect
+                    value={line.type}
+                    onChange={(nextValue) =>
+                      setStaged((current) =>
+                        current.map((item) =>
+                          item.id === line.id ? { ...item, type: nextValue as ItemType } : item
+                        )
                       )
-                    )
-                  }
-                  options={allTypeOptions}
-                  buttonClassName="bg-card px-2 py-1"
-                  ariaLabel="Ingredient type"
-                />
+                    }
+                    options={allTypeOptions}
+                    buttonClassName="bg-card px-2 py-1"
+                    ariaLabel="Ingredient type"
+                  />
+                )}
 
                 <input
                   value={line.tags.join(", ")}
@@ -442,8 +488,9 @@ export function StagingPanel() {
                 <div className="flex rounded border border-edge bg-card">
                   <input
                     type="text"
-                    value={formatQuantityValue(line.quantity)}
+                    value={quantityDrafts[line.id] ?? formatQuantityValue(line.quantity)}
                     onChange={(event) => onStagedQuantityInput(line.id, event.target.value)}
+                    onBlur={() => onStagedQuantityBlur(line.id)}
                     className="w-full bg-card px-2 py-1 text-sm outline-none"
                   />
                   <div className="min-w-[88px] border-l border-edge">
@@ -465,19 +512,36 @@ export function StagingPanel() {
                   </div>
                 </div>
 
-              <StyledSelect
-                value={line.type}
-                onChange={(nextValue) =>
-                  setStaged((current) =>
-                    current.map((item) =>
-                      item.id === line.id ? { ...item, type: nextValue as ItemType } : item
+              {sessionQuery.data?.authed ? (
+                <>
+                  <input
+                    value={line.type}
+                    list={`staging-type-options-${line.id}`}
+                    onChange={(event) => onStagedTypeInput(line.id, event.target.value)}
+                    className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
+                    placeholder="Ingredient type"
+                  />
+                  <datalist id={`staging-type-options-${line.id}`}>
+                    {allTypeOptions.map((option) => (
+                      <option key={option} value={option} />
+                    ))}
+                  </datalist>
+                </>
+              ) : (
+                <StyledSelect
+                  value={line.type}
+                  onChange={(nextValue) =>
+                    setStaged((current) =>
+                      current.map((item) =>
+                        item.id === line.id ? { ...item, type: nextValue as ItemType } : item
+                      )
                     )
-                  )
-                }
-                options={allTypeOptions}
-                buttonClassName="bg-card px-2 py-1"
-                ariaLabel="Ingredient type"
-              />
+                  }
+                  options={allTypeOptions}
+                  buttonClassName="bg-card px-2 py-1"
+                  ariaLabel="Ingredient type"
+                />
+              )}
 
               <input
                 value={line.tags.join(", ")}

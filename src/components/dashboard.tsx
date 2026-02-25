@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getDaysAged } from "@/lib/date";
@@ -34,6 +34,7 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   const [actionMap, setActionMap] = useState<Record<string, number>>({});
+  const [actionQuantityDrafts, setActionQuantityDrafts] = useState<Record<string, string>>({});
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const [actionUsername, setActionUsername] = useState("");
   const [actionPassword, setActionPassword] = useState("");
@@ -69,6 +70,7 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
     }) => consumeInventoryItems(operations, username, password),
     onSuccess: () => {
       setActionMap({});
+      setActionQuantityDrafts({});
       setActionUsername("");
       setActionPassword("");
       setAuthPromptOpen(false);
@@ -135,6 +137,16 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
   const normalizeQuantity = (value: number) => Math.round(value * 1000) / 1000;
   const defaultActionStep = (item: Item) => (item.quantityUnit ? 0.25 : 1);
 
+  useEffect(() => {
+    setActionQuantityDrafts((current) => {
+      const next: Record<string, string> = {};
+      for (const row of actionItems) {
+        next[row.item.id] = current[row.item.id] ?? formatQuantityValue(row.quantity);
+      }
+      return next;
+    });
+  }, [actionItems]);
+
   const updateActionQuantity = (itemId: string, nextQuantity: number) => {
     setActionMap((current) => {
       const maxAllowed = Math.max(0, itemById.get(itemId)?.quantity ?? 0);
@@ -154,6 +166,13 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
     const currentQty = actionMap[item.id] ?? 0;
     const nextQty = Math.min(item.quantity, normalizeQuantity(currentQty + defaultActionStep(item)));
     updateActionQuantity(item.id, nextQty);
+  };
+
+  const onActionQuantityInput = (itemId: string, rawValue: string) => {
+    setActionQuantityDrafts((current) => ({ ...current, [itemId]: rawValue }));
+    const parsed = parseQuantityInput(rawValue);
+    if (parsed === null) return;
+    updateActionQuantity(itemId, parsed);
   };
 
   const submitAction = (username?: string, password?: string) => {
@@ -200,17 +219,14 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    value={formatQuantityValue(row.quantity)}
-                    onChange={(event) => {
-                      const raw = event.target.value.trim();
-                      if (!raw) {
-                        updateActionQuantity(row.item.id, 0);
-                        return;
-                      }
-                      const parsed = parseQuantityInput(raw);
-                      if (parsed === null) return;
-                      updateActionQuantity(row.item.id, parsed);
-                    }}
+                    value={actionQuantityDrafts[row.item.id] ?? formatQuantityValue(row.quantity)}
+                    onChange={(event) => onActionQuantityInput(row.item.id, event.target.value)}
+                    onBlur={() =>
+                      setActionQuantityDrafts((current) => ({
+                        ...current,
+                        [row.item.id]: formatQuantityValue(row.quantity)
+                      }))
+                    }
                     className="w-28 rounded border border-edge bg-card px-2 py-1 font-mono text-sm outline-none transition focus:border-text"
                     aria-label="Action quantity"
                   />
@@ -245,6 +261,7 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
             disabled={actionItems.length === 0}
             onClick={() => {
               setActionMap({});
+              setActionQuantityDrafts({});
               setActionNotice("");
             }}
             className="rounded border border-edge px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-muted transition hover:border-text hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
