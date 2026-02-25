@@ -1,6 +1,7 @@
 export type ItemLocation = "Freezer" | "Pantry" | "Fridge";
 export type InventoryLabel = "Menu" | "Pantry";
 export type DbItemStockKind = "Prepared" | "Ingredient";
+export type QuantityUnit = "" | "lb" | "fl oz" | "oz" | "g" | "kg" | "ml" | "l" | "tbsp" | "cups";
 
 export type KnownItemType = "Protein" | "Carb" | "Veg" | "Ferment/Pickle";
 export type ItemType = KnownItemType | (string & {});
@@ -29,7 +30,8 @@ export interface Item {
   userId: string;
   name: string;
   photoUrl: string | null;
-  quantity: number; // Number of servings
+  quantity: number;
+  quantityUnit: QuantityUnit;
   dateAdded: string; // ISO date string (YYYY-MM-DD)
   inventoryLabel: InventoryLabel;
   location: ItemLocation;
@@ -44,6 +46,7 @@ export interface NewItemInput {
   name: string;
   photoUrl: string | null;
   quantity: number;
+  quantityUnit: QuantityUnit;
   dateAdded: string; // ISO date string
   inventoryLabel: InventoryLabel;
   location: ItemLocation;
@@ -57,7 +60,8 @@ export interface DbItemRow {
   user_id: string;
   name: string;
   photo_url: string | null;
-  quantity: number;
+  quantity: number | string;
+  quantity_unit: QuantityUnit;
   date_added: string;
   stock_kind: DbItemStockKind;
   location: ItemLocation;
@@ -93,6 +97,7 @@ export interface StagedLineItem {
   rawName: string;
   name: string;
   quantity: number;
+  quantityUnit: QuantityUnit;
   lineQuantity: number;
   embeddedPackCount: number;
   effectiveQuantity: number;
@@ -113,6 +118,7 @@ export interface SourcingConversionRule {
   tokenKey: string;
   tokenHash: string;
   canonicalName: string;
+  canonicalQuantityUnit: QuantityUnit;
   canonicalType: ItemType;
   canonicalLocation: ItemLocation;
   canonicalTags: TagValue[];
@@ -127,6 +133,7 @@ export interface SourcingConversionRuleInput {
   tokenKey: string;
   tokenHash: string;
   canonicalName: string;
+  canonicalQuantityUnit: QuantityUnit;
   canonicalType: ItemType;
   canonicalLocation: ItemLocation;
   canonicalTags: TagValue[];
@@ -139,6 +146,7 @@ export interface DbSourcingConversionRuleRow {
   token_key: string;
   token_hash: string;
   canonical_name: string;
+  canonical_quantity_unit: QuantityUnit;
   canonical_type: ItemType;
   canonical_location: ItemLocation;
   canonical_tags: string[] | null;

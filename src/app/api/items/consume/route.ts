@@ -18,6 +18,10 @@ interface ConsumeOperation {
 const MAX_OPERATIONS_PER_REQUEST = 100;
 const MAX_QUANTITY_PER_OPERATION = 5000;
 
+function normalizeQuantityValue(value: number) {
+  return Math.round(value * 1000) / 1000;
+}
+
 function normalizeOperations(input: unknown): ConsumeOperation[] {
   if (!Array.isArray(input)) return [];
 
@@ -25,16 +29,16 @@ function normalizeOperations(input: unknown): ConsumeOperation[] {
   for (const row of input) {
     const id = String((row as { id?: unknown }).id ?? "").trim();
     const quantityRaw = Number((row as { quantity?: unknown }).quantity ?? 0);
-    const quantity = Math.min(MAX_QUANTITY_PER_OPERATION, Math.max(0, Math.trunc(quantityRaw)));
+    const quantity = Math.min(MAX_QUANTITY_PER_OPERATION, Math.max(0, normalizeQuantityValue(quantityRaw)));
 
     if (!id || id.length > 128 || quantity <= 0) continue;
     if (merged.size >= MAX_OPERATIONS_PER_REQUEST && !merged.has(id)) continue;
-    merged.set(id, (merged.get(id) ?? 0) + quantity);
+    merged.set(id, normalizeQuantityValue((merged.get(id) ?? 0) + quantity));
   }
 
   return Array.from(merged.entries())
     .slice(0, MAX_OPERATIONS_PER_REQUEST)
-    .map(([id, quantity]) => ({ id, quantity }));
+    .map(([id, quantity]) => ({ id, quantity: normalizeQuantityValue(quantity) }));
 }
 
 export async function POST(request: Request) {
@@ -121,7 +125,7 @@ export async function POST(request: Request) {
   for (const operation of operations) {
     const current = quantityById.get(operation.id);
     if (!current) continue;
-    const next = Math.max(0, current.quantity - operation.quantity);
+    const next = Math.max(0, normalizeQuantityValue(current.quantity - operation.quantity));
 
     if (next === 0) {
       const { error: deleteError } = await supabase

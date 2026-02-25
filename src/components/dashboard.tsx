@@ -5,10 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getDaysAged } from "@/lib/date";
 import {
-  adjustInventoryQuantity,
   consumeInventoryItems,
   fetchInventoryItems
 } from "@/lib/inventoryApi";
+import { formatQuantityValue, formatQuantityWithUnit, parseQuantityInput } from "@/lib/quantity";
 import { getRecommendations } from "@/lib/recommendationEngine";
 import { StyledSelect } from "@/components/styled-select";
 import type { InventoryLabel, Item, ItemType } from "@/lib/types";
@@ -54,34 +54,6 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
       const response = await fetch("/api/dashboard-auth/session", { cache: "no-store" });
       if (!response.ok) return { authed: false };
       return (await response.json()) as { authed: boolean };
-    }
-  });
-
-  const canManualAdjust = sessionQuery.data?.authed === true;
-
-  const adjustMutation = useMutation({
-    mutationFn: ({ id, delta }: { id: string; delta: number }) => adjustInventoryQuantity(id, delta),
-    onMutate: async ({ id, delta }) => {
-      await queryClient.cancelQueries({ queryKey: ["inventory", inventoryLabel] });
-      const previousItems = queryClient.getQueryData<Item[]>(["inventory", inventoryLabel]);
-
-      queryClient.setQueryData<Item[]>(["inventory", inventoryLabel], (current = []) =>
-        current
-          .map((item) =>
-            item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
-          )
-          .filter((item) => item.quantity > 0)
-      );
-
-      return { previousItems };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousItems) {
-        queryClient.setQueryData(["inventory", inventoryLabel], context.previousItems);
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory", inventoryLabel] });
     }
   });
 
@@ -158,12 +130,15 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
     return entries;
   }, [actionMap, itemById]);
 
-  const actionTotal = actionItems.reduce((sum, row) => sum + row.quantity, 0);
+  const actionTotal = actionItems.length;
+
+  const normalizeQuantity = (value: number) => Math.round(value * 1000) / 1000;
+  const defaultActionStep = (item: Item) => (item.quantityUnit ? 0.25 : 1);
 
   const updateActionQuantity = (itemId: string, nextQuantity: number) => {
     setActionMap((current) => {
       const maxAllowed = Math.max(0, itemById.get(itemId)?.quantity ?? 0);
-      const safeNext = Math.min(maxAllowed, Math.max(0, Math.trunc(nextQuantity)));
+      const safeNext = Math.min(maxAllowed, Math.max(0, normalizeQuantity(nextQuantity)));
       if (safeNext <= 0) {
         if (!(itemId in current)) return current;
         const copy = { ...current };
@@ -177,7 +152,7 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
   const addToAction = (item: Item) => {
     if (item.quantity <= 0) return;
     const currentQty = actionMap[item.id] ?? 0;
-    const nextQty = Math.min(item.quantity, currentQty + 1);
+    const nextQty = Math.min(item.quantity, normalizeQuantity(currentQty + defaultActionStep(item)));
     updateActionQuantity(item.id, nextQty);
   };
 
@@ -200,7 +175,7 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-serif text-2xl">{actionLabel}</h2>
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-muted">
-            Items: {actionItems.length} • Servings: {actionTotal}
+            Items: {actionItems.length} • Selected Rows: {actionTotal}
           </p>
         </div>
 
@@ -218,26 +193,30 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
                 <div>
                   <p className="font-serif text-lg">{row.item.name}</p>
                   <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
-                    Available: {row.item.quantity}
+                    Available: {formatQuantityWithUnit(row.item.quantity, row.item.quantityUnit)}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => updateActionQuantity(row.item.id, row.quantity - 1)}
-                    className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
-                  >
-                    -
-                  </button>
-                  <span className="min-w-8 text-center font-mono text-sm">{row.quantity}</span>
-                  <button
-                    type="button"
-                    onClick={() => updateActionQuantity(row.item.id, row.quantity + 1)}
-                    className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
-                  >
-                    +
-                  </button>
+                  <input
+                    type="text"
+                    value={formatQuantityValue(row.quantity)}
+                    onChange={(event) => {
+                      const raw = event.target.value.trim();
+                      if (!raw) {
+                        updateActionQuantity(row.item.id, 0);
+                        return;
+                      }
+                      const parsed = parseQuantityInput(raw);
+                      if (parsed === null) return;
+                      updateActionQuantity(row.item.id, parsed);
+                    }}
+                    className="w-28 rounded border border-edge bg-card px-2 py-1 font-mono text-sm outline-none transition focus:border-text"
+                    aria-label="Action quantity"
+                  />
+                  <span className="min-w-12 text-center font-mono text-xs text-muted">
+                    {row.item.quantityUnit || "(blank)"}
+                  </span>
                 </div>
               </article>
             ))}
@@ -409,28 +388,10 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
 
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-mono text-muted">Days Aged: {getDaysAged(item.dateAdded)}</span>
-                  <span className="font-mono">Qty: {item.quantity}</span>
+                  <span className="font-mono">Qty: {formatQuantityWithUnit(item.quantity, item.quantityUnit)}</span>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {canManualAdjust && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => adjustMutation.mutate({ id: item.id, delta: -1 })}
-                        className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
-                      >
-                        -
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => adjustMutation.mutate({ id: item.id, delta: 1 })}
-                        className="rounded border border-edge px-3 py-1 font-mono text-sm transition hover:border-text"
-                      >
-                        +
-                      </button>
-                    </>
-                  )}
                   <button
                     type="button"
                     disabled={item.quantity <= 0}
@@ -478,7 +439,7 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
                       </span>
                     </div>
                     <p className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted">
-                      {entry.item.type} • Qty {entry.item.quantity}
+                      {entry.item.type} • Qty {formatQuantityWithUnit(entry.item.quantity, entry.item.quantityUnit)}
                     </p>
                     <p className="mt-3 text-sm text-muted">{entry.reasons[0]}</p>
                   </article>

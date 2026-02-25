@@ -122,6 +122,7 @@ test("GET returns active conversion rules for a source", async () => {
         token_key: "beef broth fire kettle",
         token_hash: "abcd1234",
         canonical_name: "beef broth",
+        canonical_quantity_unit: "",
         canonical_type: "Veg",
         canonical_location: "Pantry",
         canonical_tags: ["Wet"],
@@ -176,6 +177,7 @@ test("POST returns 401 when inline credentials are invalid", async () => {
           tokenKey: "beef broth",
           tokenHash: tokenKeyToHash("beef broth"),
           canonicalName: "beef broth",
+          canonicalQuantityUnit: "",
           canonicalType: "Veg",
           canonicalLocation: "Pantry",
           canonicalTags: ["Wet"],
@@ -201,6 +203,7 @@ test("POST returns 400 for invalid rule payload", async () => {
           tokenKey: "beef broth",
           tokenHash: "wronghash",
           canonicalName: "beef broth",
+          canonicalQuantityUnit: "",
           canonicalType: "Veg",
           canonicalLocation: "Pantry",
           canonicalTags: ["Wet"],
@@ -225,6 +228,7 @@ test("POST upserts a valid rule and returns normalized response", async () => {
       token_key: tokenKey,
       token_hash: tokenHash,
       canonical_name: "beef broth",
+      canonical_quantity_unit: "",
       canonical_type: "Veg",
       canonical_location: "Pantry",
       canonical_tags: ["Wet"],
@@ -246,6 +250,7 @@ test("POST upserts a valid rule and returns normalized response", async () => {
           tokenKey,
           tokenHash,
           canonicalName: "beef broth",
+          canonicalQuantityUnit: "",
           canonicalType: "Veg",
           canonicalLocation: "Pantry",
           canonicalTags: ["Wet"],
@@ -263,6 +268,7 @@ test("POST upserts a valid rule and returns normalized response", async () => {
   expect(state.lastFromTable).toBe("sourcing_conversion_rules");
   expect(state.lastUpsertConflict).toBe("source,token_hash");
   expect(state.lastUpsertRow?.token_hash).toBe(tokenHash);
+  expect(state.lastUpsertRow?.canonical_quantity_unit).toBe("");
   expect(payload.rule.id).toBe("rule-9");
   expect(payload.rule.canonicalName).toBe("beef broth");
   expect(payload.rule.embeddedMultiplierOverride).toBe(4);

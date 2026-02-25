@@ -13,7 +13,8 @@
   - `user_id uuid` (owned by auth user)
   - `name text`
   - `photo_url text`
-  - `quantity int >= 0`
+  - `quantity numeric(12,3) >= 0` (supports fractions)
+  - `quantity_unit text` (`'', lb, fl oz, oz, g, kg, ml, l, tbsp, cups`)
   - `date_added date`
   - `stock_kind enum('Prepared','Ingredient')`
   - `location enum('Freezer','Pantry','Fridge')`
@@ -39,6 +40,7 @@
   - `token_key text`
   - `token_hash text` (unique with source)
   - `canonical_name text`
+  - `canonical_quantity_unit text`
   - `canonical_type text`
   - `canonical_location enum('Freezer','Pantry','Fridge')`
   - `canonical_tags text[]`
@@ -69,3 +71,4 @@
 - `20260218_create_item_photos_bucket.sql`: creates upload bucket
 - `20260218_items_type_text_and_ingredients.sql`: converts `type` to text and adds `ingredients`
 - `20260225_sourcing_conversion_rules.sql`: adds deterministic receipt conversion hash-table
+- `20260225_items_quantity_units.sql`: adds quantity units and fractional quantity support

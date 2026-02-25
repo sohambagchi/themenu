@@ -75,6 +75,7 @@ test("parseReceiptText applies confirmed conversion rules by token hash", () => 
     tokenKey: tokenized.tokenKey,
     tokenHash: tokenized.tokenHash,
     canonicalName: "beef broth",
+    canonicalQuantityUnit: "",
     canonicalType: "Veg",
     canonicalLocation: "Pantry",
     canonicalTags: ["Wet"],

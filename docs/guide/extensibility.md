@@ -33,6 +33,7 @@
 ## Sourcing parser and conversion rules
 - Sourcing receipt parsing must stay deterministic; do not add probabilistic inference or LLM calls.
 - Parser entrypoint: `src/lib/staging.ts::parseReceiptText`.
+- Walmart PDF entrypoint: `POST /api/sourcing/pdf-text`, implemented via `src/lib/walmartPdf.ts` (JS-only parser for Vercel runtime compatibility).
 - For Walmart receipts, parse the item block immediately before `Shopped|Weight-adjusted|Unavailable Qty N`.
 - Compute effective quantity as `line qty * embedded pack/count multiplier`.
 - Hash matching key is derived from normalized tokens (`tokenKey`, `tokenHash` from `tokenizeReceiptName`).
@@ -43,6 +44,12 @@
   - `resolved`: committable rows
   - `needs_review`: manual edit + `Confirm Mapping`
   - `ignored`: non-committable rows (e.g., unavailable lines)
+
+## Quantity + units
+- Units are canonicalized through `src/lib/quantity.ts`.
+- Allowed units: `'', lb, fl oz, oz, g, kg, ml, l, tbsp, cups`.
+- Quantity fields now accept fractions (`1/2`, `1 1/2`) and decimals where quantity editing is exposed.
+- Avoid hard-coding integer-only assumptions in new features; preserve fractional values through API and DB.
 
 ## Testing workflow notes
 - Current repo has no committed ESLint config, so `next lint` may prompt interactively.

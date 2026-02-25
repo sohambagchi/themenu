@@ -6,6 +6,7 @@ import {
   requireDashboardSession
 } from "@/lib/dashboardAuth";
 import { isAllowedRequestOrigin } from "@/lib/origin";
+import { normalizeQuantityUnit } from "@/lib/quantity";
 import { getRequestIp } from "@/lib/requestMeta";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { tokenKeyToHash } from "@/lib/staging";
@@ -40,6 +41,7 @@ function rowToRule(row: DbSourcingConversionRuleRow): SourcingConversionRule {
     tokenKey: row.token_key,
     tokenHash: row.token_hash,
     canonicalName: row.canonical_name,
+    canonicalQuantityUnit: row.canonical_quantity_unit ?? "",
     canonicalType: row.canonical_type,
     canonicalLocation: row.canonical_location,
     canonicalTags: (row.canonical_tags ?? []) as TagValue[],
@@ -58,6 +60,7 @@ function normalizeRule(raw: unknown): SourcingConversionRuleInput | null {
   const tokenKey = normalizeText(value.tokenKey).toLowerCase().slice(0, 200);
   const tokenHash = normalizeText(value.tokenHash).toLowerCase();
   const canonicalName = normalizeText(value.canonicalName).slice(0, 120);
+  const canonicalQuantityUnit = normalizeQuantityUnit(value.canonicalQuantityUnit ?? "");
   const canonicalType = normalizeText(value.canonicalType).slice(0, 64);
   const canonicalLocation = normalizeText(value.canonicalLocation) as ItemLocation;
   const canonicalTags = normalizeTagList(value.canonicalTags);
@@ -71,6 +74,7 @@ function normalizeRule(raw: unknown): SourcingConversionRuleInput | null {
   if (!tokenHash) return null;
   if (tokenHash !== tokenKeyToHash(tokenKey)) return null;
   if (!canonicalName) return null;
+  if (canonicalQuantityUnit === null) return null;
   if (!canonicalType) return null;
   if (!VALID_LOCATIONS.has(canonicalLocation)) return null;
   if (
@@ -87,6 +91,7 @@ function normalizeRule(raw: unknown): SourcingConversionRuleInput | null {
     tokenKey,
     tokenHash,
     canonicalName,
+    canonicalQuantityUnit,
     canonicalType,
     canonicalLocation,
     canonicalTags,
@@ -180,6 +185,7 @@ export async function POST(request: Request) {
     token_key: normalizedRule.tokenKey,
     token_hash: normalizedRule.tokenHash,
     canonical_name: normalizedRule.canonicalName,
+    canonical_quantity_unit: normalizedRule.canonicalQuantityUnit,
     canonical_type: normalizedRule.canonicalType,
     canonical_location: normalizedRule.canonicalLocation,
     canonical_tags: normalizedRule.canonicalTags,

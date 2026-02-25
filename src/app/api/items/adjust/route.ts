@@ -4,6 +4,10 @@ import { getDashboardOwnerUserId, requireDashboardSession } from "@/lib/dashboar
 import { isAllowedRequestOrigin } from "@/lib/origin";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
+function normalizeQuantityValue(value: number) {
+  return Math.round(value * 1000) / 1000;
+}
+
 export async function POST(request: Request) {
   if (!isAllowedRequestOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
@@ -44,7 +48,7 @@ export async function POST(request: Request) {
 
   if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
 
-  const nextQty = Math.max(0, Number(row.quantity) + delta);
+  const nextQty = Math.max(0, normalizeQuantityValue(Number(row.quantity) + delta));
   if (nextQty === 0) {
     const { error: deleteError } = await supabase
       .from("items")

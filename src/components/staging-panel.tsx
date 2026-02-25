@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { StyledSelect } from "@/components/styled-select";
 import { insertItems } from "@/lib/inventoryApi";
-import { fetchSourcingConversionRules, upsertSourcingConversionRule } from "@/lib/sourcingApi";
+import { formatQuantityValue, parseQuantityInput, QUANTITY_UNIT_OPTIONS } from "@/lib/quantity";
+import {
+  extractSourcingPdfText,
+  fetchSourcingConversionRules,
+  upsertSourcingConversionRule
+} from "@/lib/sourcingApi";
 import { mockOcrScan, parseReceiptText } from "@/lib/staging";
 import type {
   ItemType,
   NewItemInput,
+  QuantityUnit,
   SourcingConversionRule,
   SourcingConversionRuleInput,
   StagedLineItem
@@ -23,6 +29,7 @@ function toInventoryItem(line: StagedLineItem): NewItemInput {
     name: line.name,
     photoUrl: null,
     quantity: line.quantity,
+    quantityUnit: line.quantityUnit,
     dateAdded: now.slice(0, 10),
     inventoryLabel: "Pantry",
     location: line.location,
@@ -34,6 +41,7 @@ function toInventoryItem(line: StagedLineItem): NewItemInput {
 
 export function StagingPanel() {
   const queryClient = useQueryClient();
+  const pdfFilePickerRef = useRef<HTMLInputElement>(null);
   const [rawText, setRawText] = useState(mockOcrScan());
   const [staged, setStaged] = useState<StagedLineItem[]>(
     parseReceiptText(mockOcrScan(), [], SOURCING_SOURCE)
@@ -47,6 +55,14 @@ export function StagingPanel() {
 
   const parseWithCurrentRules = (text: string, rules?: SourcingConversionRule[]) => {
     setStaged(parseReceiptText(text, rules ?? conversionQuery.data ?? [], SOURCING_SOURCE));
+  };
+
+  const onStagedQuantityInput = (lineId: string, rawValue: string) => {
+    const parsed = parseQuantityInput(rawValue);
+    if (parsed === null || parsed <= 0) return;
+    setStaged((current) =>
+      current.map((entry) => (entry.id === lineId ? { ...entry, quantity: parsed } : entry))
+    );
   };
 
   useEffect(() => {
@@ -80,6 +96,18 @@ export function StagingPanel() {
     }
   });
 
+  const pdfParseMutation = useMutation({
+    mutationFn: async (file: File) => extractSourcingPdfText(file, SOURCING_SOURCE),
+    onSuccess: (text) => {
+      setRawText(text);
+      parseWithCurrentRules(text);
+      setErrorMessage("");
+    },
+    onError: (error) => {
+      setErrorMessage(error instanceof Error ? error.message : "PDF parsing failed.");
+    }
+  });
+
   const confirmMappingMutation = useMutation({
     mutationFn: async (lineId: string) => {
       const line = staged.find((entry) => entry.id === lineId);
@@ -100,6 +128,7 @@ export function StagingPanel() {
         tokenKey: line.tokenKey,
         tokenHash: line.tokenHash,
         canonicalName: line.name,
+        canonicalQuantityUnit: line.quantityUnit,
         canonicalType: line.type,
         canonicalLocation: line.location,
         canonicalTags: line.tags,
@@ -126,11 +155,6 @@ export function StagingPanel() {
     }
   });
 
-  const totalQuantity = useMemo(
-    () => resolvedStaged.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-    [resolvedStaged]
-  );
-
   return (
     <div className="space-y-6">
       <section className="rounded-lg border border-edge bg-card p-5">
@@ -147,6 +171,27 @@ export function StagingPanel() {
           >
             Mock OCR
           </button>
+          <button
+            type="button"
+            onClick={() => pdfFilePickerRef.current?.click()}
+            disabled={pdfParseMutation.isPending}
+            className="rounded border border-edge px-3 py-2 text-xs uppercase tracking-[0.14em] text-muted transition hover:border-text hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Upload Walmart PDF
+          </button>
+          <input
+            ref={pdfFilePickerRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (!file) return;
+              setErrorMessage("");
+              pdfParseMutation.mutate(file);
+            }}
+          />
         </div>
 
         <label className="block">
@@ -187,7 +232,7 @@ export function StagingPanel() {
           <h3 className="font-serif text-xl">Staging Review</h3>
           <p className="font-mono text-xs uppercase tracking-[0.15em] text-muted">
             Resolved: {resolvedStaged.length} • Review: {needsReviewStaged.length} • Ignored:{" "}
-            {ignoredStaged.length} • Commit Qty: {totalQuantity}
+            {ignoredStaged.length}
           </p>
         </div>
 
@@ -212,21 +257,31 @@ export function StagingPanel() {
                   className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
                 />
 
-                <input
-                  type="number"
-                  min={1}
-                  value={line.quantity}
-                  onChange={(event) =>
-                    setStaged((current) =>
-                      current.map((item) =>
-                        item.id === line.id
-                          ? { ...item, quantity: Math.max(1, Number(event.target.value) || 1) }
-                          : item
-                      )
-                    )
-                  }
-                  className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
-                />
+                <div className="flex overflow-hidden rounded border border-edge bg-card">
+                  <input
+                    type="text"
+                    value={formatQuantityValue(line.quantity)}
+                    onChange={(event) => onStagedQuantityInput(line.id, event.target.value)}
+                    className="w-full bg-card px-2 py-1 text-sm outline-none"
+                  />
+                  <div className="min-w-[88px] border-l border-edge">
+                    <StyledSelect
+                      value={line.quantityUnit}
+                      onChange={(nextValue) =>
+                        setStaged((current) =>
+                          current.map((item) =>
+                            item.id === line.id
+                              ? { ...item, quantityUnit: nextValue as QuantityUnit }
+                              : item
+                          )
+                        )
+                      }
+                      options={QUANTITY_UNIT_OPTIONS}
+                      buttonClassName="h-full rounded-none border-0 bg-card px-2 py-1 text-xs"
+                      ariaLabel="Quantity unit"
+                    />
+                  </div>
+                </div>
 
                 <StyledSelect
                   value={line.type}
@@ -278,7 +333,11 @@ export function StagingPanel() {
           ))}
 
           {resolvedStaged.map((line) => (
-            <article key={line.id} className="grid gap-2 rounded border border-edge bg-canvas p-3 md:grid-cols-4">
+            <article key={line.id} className="space-y-2 rounded border border-edge bg-canvas p-3">
+              <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
+                Resolved • Qty {formatQuantityValue(line.quantity)} {line.quantityUnit}
+              </p>
+              <div className="grid gap-2 md:grid-cols-4">
               <input
                 value={line.name}
                 onChange={(event) =>
@@ -291,21 +350,31 @@ export function StagingPanel() {
                 className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
               />
 
-              <input
-                type="number"
-                min={1}
-                value={line.quantity}
-                onChange={(event) =>
-                  setStaged((current) =>
-                    current.map((item) =>
-                      item.id === line.id
-                        ? { ...item, quantity: Math.max(1, Number(event.target.value) || 1) }
-                        : item
-                    )
-                  )
-                }
-                className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
-              />
+                <div className="flex overflow-hidden rounded border border-edge bg-card">
+                  <input
+                    type="text"
+                    value={formatQuantityValue(line.quantity)}
+                    onChange={(event) => onStagedQuantityInput(line.id, event.target.value)}
+                    className="w-full bg-card px-2 py-1 text-sm outline-none"
+                  />
+                  <div className="min-w-[88px] border-l border-edge">
+                    <StyledSelect
+                      value={line.quantityUnit}
+                      onChange={(nextValue) =>
+                        setStaged((current) =>
+                          current.map((item) =>
+                            item.id === line.id
+                              ? { ...item, quantityUnit: nextValue as QuantityUnit }
+                              : item
+                          )
+                        )
+                      }
+                      options={QUANTITY_UNIT_OPTIONS}
+                      buttonClassName="h-full rounded-none border-0 bg-card px-2 py-1 text-xs"
+                      ariaLabel="Quantity unit"
+                    />
+                  </div>
+                </div>
 
               <StyledSelect
                 value={line.type}
@@ -341,6 +410,7 @@ export function StagingPanel() {
                 className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
                 placeholder="tag1, tag2, tag3"
               />
+              </div>
             </article>
           ))}
 
@@ -360,6 +430,11 @@ export function StagingPanel() {
         {conversionQuery.isLoading && (
           <p className="mt-3 font-mono text-xs uppercase tracking-[0.12em] text-muted">
             Loading conversion rules...
+          </p>
+        )}
+        {pdfParseMutation.isPending && (
+          <p className="mt-3 font-mono text-xs uppercase tracking-[0.12em] text-muted">
+            Parsing PDF...
           </p>
         )}
 

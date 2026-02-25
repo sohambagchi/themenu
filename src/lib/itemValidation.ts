@@ -1,5 +1,6 @@
 import type { ItemLocation, NewItemInput, TagValue } from "@/lib/types";
 import { parseInventoryLabel } from "@/lib/inventoryLabels";
+import { normalizeQuantityUnit, parseQuantityUnknown } from "@/lib/quantity";
 
 const VALID_LOCATIONS = new Set<ItemLocation>(["Freezer", "Pantry", "Fridge"]);
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -60,7 +61,7 @@ function normalizeItem(raw: unknown): NewItemInput | null {
   const inventoryLabel = parseInventoryLabel(row.inventoryLabel);
   const location = normalizeText(row.location) as ItemLocation;
   const dateAdded = normalizeText(row.dateAdded);
-  const quantity = Math.trunc(Number(row.quantity ?? 0));
+  const quantityUnit = normalizeQuantityUnit(row.quantityUnit ?? "");
   const photoUrl = normalizePhotoUrl(row.photoUrl);
   const ingredients = normalizeList(row.ingredients);
   const tags = normalizeList(row.tags) as TagValue[];
@@ -70,13 +71,18 @@ function normalizeItem(raw: unknown): NewItemInput | null {
   if (!inventoryLabel) return null;
   if (!VALID_LOCATIONS.has(location)) return null;
   if (!isValidIsoDate(dateAdded)) return null;
-  if (!Number.isFinite(quantity) || quantity < 1 || quantity > 5000) return null;
+  const parsedQuantity = parseQuantityUnknown(row.quantity ?? 0);
+  if (!Number.isFinite(parsedQuantity ?? NaN) || (parsedQuantity ?? 0) <= 0 || (parsedQuantity ?? 0) > 5000) {
+    return null;
+  }
+  if (quantityUnit === null) return null;
   if (row.photoUrl && !photoUrl) return null;
 
   return {
     name,
     photoUrl,
-    quantity,
+    quantity: parsedQuantity ?? 0,
+    quantityUnit,
     dateAdded,
     inventoryLabel,
     location,

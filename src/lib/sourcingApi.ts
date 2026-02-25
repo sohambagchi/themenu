@@ -52,3 +52,26 @@ export async function upsertSourcingConversionRule(
   const responsePayload = (await response.json()) as { rule: SourcingConversionRule };
   return responsePayload.rule;
 }
+
+export async function extractSourcingPdfText(file: File, source: string) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("source", source);
+
+  const response = await fetch("/api/sourcing/pdf-text", {
+    method: "POST",
+    body: formData
+  });
+
+  if (response.status === 401) {
+    throw new Error("Login required to parse PDF receipts.");
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Failed to parse PDF receipt.");
+  }
+
+  const payload = (await response.json()) as { text: string };
+  return payload.text ?? "";
+}

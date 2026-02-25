@@ -5,17 +5,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { StyledSelect } from "@/components/styled-select";
 import { insertItems, uploadInventoryImage } from "@/lib/inventoryApi";
-import type { ItemLocation, ItemType, NewItemInput, TagValue } from "@/lib/types";
+import { formatQuantityValue, parseQuantityInput, QUANTITY_UNIT_OPTIONS } from "@/lib/quantity";
+import type { ItemLocation, ItemType, NewItemInput, QuantityUnit, TagValue } from "@/lib/types";
 
 const DEFAULT_TYPES: ItemType[] = ["Protein", "Carb", "Veg", "Ferment/Pickle"];
 const CUSTOM_TYPES_STORAGE_KEY = "themenu_custom_prepared_types";
-
-const parseServingsInput = (rawValue: string): number | null => {
-  const parsed = Number(rawValue);
-  const whole = Math.trunc(parsed);
-  if (!Number.isFinite(parsed) || whole < 1) return null;
-  return whole;
-};
 
 export function MiseEnPlacePanel() {
   const queryClient = useQueryClient();
@@ -23,6 +17,7 @@ export function MiseEnPlacePanel() {
   const [name, setName] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
   const [quantityInput, setQuantityInput] = useState("1");
+  const [quantityUnit, setQuantityUnit] = useState<QuantityUnit>("");
   const [dateAdded, setDateAdded] = useState(new Date().toISOString().slice(0, 10));
   const [location, setLocation] = useState<ItemLocation>("Fridge");
   const [type, setType] = useState<ItemType>("Protein");
@@ -59,7 +54,7 @@ export function MiseEnPlacePanel() {
     for (const value of customTypes) set.add(value);
     return Array.from(set);
   }, [customTypes]);
-  const parsedServings = useMemo(() => parseServingsInput(quantityInput), [quantityInput]);
+  const parsedQuantity = useMemo(() => parseQuantityInput(quantityInput), [quantityInput]);
 
   const sessionQuery = useQuery({
     queryKey: ["dashboard-session"],
@@ -93,11 +88,11 @@ export function MiseEnPlacePanel() {
     mutationFn: async ({
       username,
       password,
-      servings
+      quantity
     }: {
       username?: string;
       password?: string;
-      servings: number;
+      quantity: number;
     }) => {
       const tags = tagsText
         .split(",")
@@ -112,7 +107,8 @@ export function MiseEnPlacePanel() {
       const payload: NewItemInput = {
         name: name.trim(),
         photoUrl: photoUrl.trim() || null,
-        quantity: servings,
+        quantity,
+        quantityUnit,
         dateAdded,
         inventoryLabel: "Menu",
         location,
@@ -129,6 +125,7 @@ export function MiseEnPlacePanel() {
       setName("");
       setPhotoUrl("");
       setQuantityInput("1");
+      setQuantityUnit("");
       setIngredientsText("");
       setTagsText("");
       setAuthPromptOpen(false);
@@ -152,11 +149,6 @@ export function MiseEnPlacePanel() {
     setCustomTypeInput("");
   };
 
-  const stepServings = (delta: number) => {
-    const base = parsedServings ?? 1;
-    setQuantityInput(String(Math.max(1, base + delta)));
-  };
-
   return (
     <section className="rounded-lg border border-edge bg-card p-5">
       <h2 className="font-serif text-2xl">Mise en Place</h2>
@@ -169,13 +161,13 @@ export function MiseEnPlacePanel() {
         onSubmit={(event) => {
           event.preventDefault();
           setNotice("");
-          const servings = parseServingsInput(quantityInput);
-          if (servings === null) {
-            setNotice("Servings must be a non-zero number.");
+          const quantity = parseQuantityInput(quantityInput);
+          if (quantity === null || quantity <= 0) {
+            setNotice("Quantity must be greater than zero. Fractions like 1/2 are allowed.");
             return;
           }
           if (sessionQuery.data?.authed) {
-            createMutation.mutate({ servings });
+            createMutation.mutate({ quantity });
             return;
           }
 
@@ -242,43 +234,33 @@ export function MiseEnPlacePanel() {
         </label>
 
         <label className="block">
-          <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Servings</span>
+          <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Quantity</span>
           <div className="mt-2 flex overflow-hidden rounded border border-edge bg-canvas">
             <input
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               value={quantityInput}
               onChange={(event) => {
-                const nextValue = event.target.value.trim();
-                if (!nextValue) {
-                  setQuantityInput("");
-                  return;
-                }
-                if (!/^\d+$/.test(nextValue)) return;
-                setQuantityInput(nextValue);
+                setQuantityInput(event.target.value);
               }}
               className="w-full bg-canvas px-3 py-2 text-sm outline-none transition focus:border-text"
+              placeholder="e.g. 1, 0.5, 1/2"
             />
-            <div className="flex w-10 flex-col border-l border-edge">
-              <button
-                type="button"
-                onClick={() => stepServings(1)}
-                className="flex-1 border-b border-edge text-sm text-muted transition hover:bg-card hover:text-text"
-                aria-label="Increase servings"
-              >
-                ^
-              </button>
-              <button
-                type="button"
-                onClick={() => stepServings(-1)}
-                disabled={(parsedServings ?? 1) <= 1}
-                className="flex-1 text-sm text-muted transition hover:bg-card hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Decrease servings"
-              >
-                v
-              </button>
+            <div className="min-w-[100px] border-l border-edge">
+              <StyledSelect
+                value={quantityUnit}
+                onChange={(nextValue) => setQuantityUnit(nextValue as QuantityUnit)}
+                options={QUANTITY_UNIT_OPTIONS}
+                buttonClassName="h-full rounded-none border-0 bg-canvas px-2 py-2 text-xs"
+                ariaLabel="Quantity unit"
+              />
             </div>
           </div>
+          {parsedQuantity !== null && parsedQuantity > 0 && (
+            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-muted">
+              Parsed: {formatQuantityValue(parsedQuantity)} {quantityUnit || "(blank)"}
+            </p>
+          )}
         </label>
 
         <label className="block">
@@ -391,15 +373,15 @@ export function MiseEnPlacePanel() {
                 disabled={createMutation.isPending || uploadMutation.isPending}
                 onClick={() => {
                   setNotice("");
-                  const servings = parseServingsInput(quantityInput);
-                  if (servings === null) {
-                    setNotice("Servings must be a non-zero number.");
+                  const quantity = parseQuantityInput(quantityInput);
+                  if (quantity === null || quantity <= 0) {
+                    setNotice("Quantity must be greater than zero. Fractions like 1/2 are allowed.");
                     return;
                   }
                   createMutation.mutate({
                     username: authUsername,
                     password: authPassword,
-                    servings
+                    quantity
                   });
                 }}
                 className="rounded border border-text bg-text px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-canvas disabled:cursor-not-allowed disabled:opacity-50"

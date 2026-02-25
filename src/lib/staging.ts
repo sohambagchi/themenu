@@ -66,11 +66,29 @@ function normalizeWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function splitIntoBlocks(rawText: string) {
-  return rawText
-    .split(/\r?\n\s*\r?\n/g)
-    .map((block) => normalizeWhitespace(block))
+function normalizeReceiptLines(rawText: string) {
+  const rawLines = rawText
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
+
+  const lines: string[] = [];
+  for (let index = 0; index < rawLines.length; index += 1) {
+    const current = rawLines[index];
+    const next = rawLines[index + 1];
+    const statusMatch = current.match(/^(Shopped|Weight-adjusted|Unavailable)$/i);
+    const qtyMatch = next?.match(/^Qty\s+(\d+)$/i);
+
+    if (statusMatch && qtyMatch) {
+      lines.push(`${statusMatch[1]} Qty ${qtyMatch[1]}`);
+      index += 1;
+      continue;
+    }
+
+    lines.push(current);
+  }
+
+  return lines;
 }
 
 function isNonItemBlock(block: string) {
@@ -231,25 +249,41 @@ export function parseReceiptText(
   rules: SourcingConversionRule[] = [],
   source = DEFAULT_SOURCE
 ): StagedLineItem[] {
-  const blocks = splitIntoBlocks(rawText);
+  const lines = normalizeReceiptLines(rawText);
   const ruleLookup = buildRuleLookup(source, rules);
   const staged: StagedLineItem[] = [];
 
-  for (let index = 0; index < blocks.length; index += 1) {
-    const block = blocks[index];
-    const parsedStatus = parseStatus(block);
+  for (let index = 0; index < lines.length; index += 1) {
+    const statusLine = lines[index];
+    const parsedStatus = parseStatus(statusLine);
     if (!parsedStatus) continue;
 
-    const rawNameBlock = blocks[index - 1];
-    if (!rawNameBlock || isNonItemBlock(rawNameBlock) || PRICE_RE.test(rawNameBlock)) continue;
+    let rawNameLine = "";
+    for (let candidateIndex = index - 1; candidateIndex >= 0; candidateIndex -= 1) {
+      const candidate = lines[candidateIndex];
+      if (!candidate) continue;
+      if (isNonItemBlock(candidate)) continue;
+      if (PRICE_RE.test(candidate)) continue;
+      if (/^Qty\s+\d+$/i.test(candidate)) continue;
+      if (/^(Shopped|Weight-adjusted|Unavailable)$/i.test(candidate)) continue;
+      if (parseStatus(candidate)) continue;
+      rawNameLine = candidate;
+      break;
+    }
 
-    const rawName = normalizeWhitespace(rawNameBlock);
+    if (!rawNameLine) continue;
+
+    const rawName = normalizeWhitespace(rawNameLine);
     const displayName = sanitizeName(rawName);
     const tokenized = tokenizeReceiptName(rawName);
     const matchedRule = ruleLookup.get(tokenized.tokenHash) ?? null;
     const multiplier = matchedRule?.embeddedMultiplierOverride ?? tokenized.embeddedPackCount;
     const effectiveQuantity = Math.max(0, parsedStatus.quantity * Math.max(1, multiplier));
     const parseWarnings: string[] = [];
+    const priceLine = lines.slice(index + 1, index + 4).find((line) => PRICE_RE.test(line));
+    if (!priceLine) {
+      parseWarnings.push("Price line not found near status line.");
+    }
 
     let parseState: StagedLineItem["parseState"] = "needs_review";
     if (parsedStatus.status === "unavailable") {
@@ -262,6 +296,7 @@ export function parseReceiptText(
     }
 
     const name = matchedRule?.canonicalName ?? displayName;
+    const quantityUnit = matchedRule?.canonicalQuantityUnit ?? "";
     const type = toSupabaseTypeLabel(matchedRule?.canonicalType ?? inferType(displayName));
     const location = matchedRule?.canonicalLocation ?? DEFAULT_LOCATION;
     const tags = matchedRule?.canonicalTags?.length
@@ -271,10 +306,11 @@ export function parseReceiptText(
     staged.push({
       id: `staged-${staged.length + 1}`,
       source,
-      rawLine: [rawName, block, blocks[index + 1] ?? ""].filter(Boolean).join(" | "),
+      rawLine: [rawName, statusLine, priceLine ?? ""].filter(Boolean).join(" | "),
       rawName,
       name,
       quantity: effectiveQuantity,
+      quantityUnit,
       lineQuantity: parsedStatus.quantity,
       embeddedPackCount: tokenized.embeddedPackCount,
       effectiveQuantity,

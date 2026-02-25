@@ -22,7 +22,10 @@ create table public.items (
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null check (char_length(trim(name)) > 0),
   photo_url text,
-  quantity integer not null default 0 check (quantity >= 0),
+  quantity numeric(12,3) not null default 0 check (quantity >= 0),
+  quantity_unit text not null default '' check (
+    quantity_unit in ('', 'lb', 'fl oz', 'oz', 'g', 'kg', 'ml', 'l', 'tbsp', 'cups')
+  ),
   date_added date not null default current_date,
   stock_kind public.item_stock_kind not null default 'Prepared',
   location public.item_location not null,
@@ -76,6 +79,9 @@ create table public.sourcing_conversion_rules (
   token_key text not null check (char_length(trim(token_key)) > 0),
   token_hash text not null check (char_length(trim(token_hash)) > 0),
   canonical_name text not null check (char_length(trim(canonical_name)) > 0),
+  canonical_quantity_unit text not null default '' check (
+    canonical_quantity_unit in ('', 'lb', 'fl oz', 'oz', 'g', 'kg', 'ml', 'l', 'tbsp', 'cups')
+  ),
   canonical_type text not null check (char_length(trim(canonical_type)) > 0),
   canonical_location public.item_location not null default 'Pantry',
   canonical_tags text[] not null default '{}',
