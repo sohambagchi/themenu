@@ -18,7 +18,8 @@ import type {
   QuantityUnit,
   SourcingConversionRule,
   SourcingConversionRuleInput,
-  StagedLineItem
+  StagedLineItem,
+  TagValue
 } from "@/lib/types";
 
 const SOURCING_SOURCE = "walmart";
@@ -42,6 +43,17 @@ function toInventoryItem(line: StagedLineItem): NewItemInput {
   };
 }
 
+function parseTagInput(raw: string): TagValue[] {
+  return raw
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean) as TagValue[];
+}
+
+function formatTagInput(tags: TagValue[]) {
+  return tags.join(", ");
+}
+
 export function StagingPanel() {
   const queryClient = useQueryClient();
   const pdfFilePickerRef = useRef<HTMLInputElement>(null);
@@ -53,6 +65,8 @@ export function StagingPanel() {
   const [customTypes, setCustomTypes] = useState<string[]>([]);
   const [customTypeInput, setCustomTypeInput] = useState("");
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
+  const [mappingLineIdPending, setMappingLineIdPending] = useState<string | null>(null);
 
   const conversionQuery = useQuery({
     queryKey: ["sourcing-conversions", SOURCING_SOURCE],
@@ -68,6 +82,7 @@ export function StagingPanel() {
   });
 
   const parseWithCurrentRules = (text: string, rules?: SourcingConversionRule[]) => {
+    setTagDrafts({});
     setStaged(parseReceiptText(text, rules ?? conversionQuery.data ?? [], SOURCING_SOURCE));
   };
 
@@ -151,6 +166,16 @@ export function StagingPanel() {
     });
   }, [staged]);
 
+  useEffect(() => {
+    setTagDrafts((current) => {
+      const next: Record<string, string> = {};
+      for (const line of staged) {
+        next[line.id] = current[line.id] ?? formatTagInput(line.tags);
+      }
+      return next;
+    });
+  }, [staged]);
+
   const allTypeOptions = useMemo(() => {
     const set = new Set<string>(DEFAULT_TYPE_OPTIONS);
     for (const value of customTypes) set.add(value);
@@ -203,6 +228,10 @@ export function StagingPanel() {
   });
 
   const confirmMappingMutation = useMutation({
+    onMutate: (lineId: string) => {
+      setMappingLineIdPending(lineId);
+      setErrorMessage("");
+    },
     mutationFn: async (lineId: string) => {
       const line = staged.find((entry) => entry.id === lineId);
       if (!line) {
@@ -225,13 +254,13 @@ export function StagingPanel() {
         canonicalQuantityUnit: line.quantityUnit,
         canonicalType: line.type,
         canonicalLocation: line.location,
-        canonicalTags: line.tags,
+        canonicalTags: parseTagInput(tagDrafts[lineId] ?? formatTagInput(line.tags)),
         embeddedMultiplierOverride
       };
 
       return upsertSourcingConversionRule(payload);
     },
-    onSuccess: (savedRule) => {
+    onSuccess: (savedRule, lineId) => {
       queryClient.setQueryData<SourcingConversionRule[]>(
         ["sourcing-conversions", SOURCING_SOURCE],
         (current) => {
@@ -242,10 +271,46 @@ export function StagingPanel() {
           return next;
         }
       );
+      queryClient.invalidateQueries({ queryKey: ["sourcing-conversions", SOURCING_SOURCE] });
+      setStaged((current) => {
+        const savedMultiplier = savedRule.embeddedMultiplierOverride;
+        const target = current.find((entry) => entry.id === lineId);
+        if (!target) return current;
+
+        return current.map((entry) => {
+          if (entry.source !== savedRule.source || entry.tokenHash !== savedRule.tokenHash) {
+            return entry;
+          }
+
+          const multiplier = savedMultiplier ?? entry.embeddedPackCount;
+          const effectiveQuantity = Math.max(0, entry.lineQuantity * Math.max(1, multiplier));
+          const parseWarnings = entry.parseWarnings.filter(
+            (warning) => warning !== "No confirmed conversion rule."
+          );
+
+          return {
+            ...entry,
+            name: savedRule.canonicalName,
+            quantityUnit: savedRule.canonicalQuantityUnit,
+            type: savedRule.canonicalType,
+            location: savedRule.canonicalLocation,
+            tags: savedRule.canonicalTags,
+            quantity: effectiveQuantity,
+            effectiveQuantity,
+            parseState: entry.status === "unavailable" ? "ignored" : "resolved",
+            parseWarnings,
+            matchedRuleId: savedRule.id
+          };
+        });
+      });
+      setTagDrafts({});
       setErrorMessage("");
     },
     onError: (error) => {
       setErrorMessage(error instanceof Error ? error.message : "Saving mapping failed.");
+    },
+    onSettled: () => {
+      setMappingLineIdPending(null);
     }
   });
 
@@ -354,118 +419,139 @@ export function StagingPanel() {
         )}
 
         <div className="space-y-3">
-          {needsReviewStaged.map((line) => (
-            <article key={line.id} className="space-y-2 rounded border border-edge bg-canvas p-3">
-              <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
-                Needs Review • {line.status.replace("_", " ")} • Line Qty {line.lineQuantity} •
-                Pack {line.embeddedPackCount} • Effective {line.effectiveQuantity}
-              </p>
-              <p className="font-mono text-xs text-muted">{line.rawLine}</p>
-              <div className="grid gap-2 md:grid-cols-4">
-                <input
-                  value={line.name}
-                  onChange={(event) =>
-                    setStaged((current) =>
-                      current.map((item) =>
-                        item.id === line.id ? { ...item, name: event.target.value } : item
-                      )
-                    )
-                  }
-                  className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
-                />
-
-                <div className="flex rounded border border-edge bg-card">
+          {needsReviewStaged.map((line) => {
+            const isMappingPending = mappingLineIdPending === line.id;
+            return (
+              <article key={line.id} className="space-y-2 rounded border border-edge bg-canvas p-3">
+                <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
+                  Needs Review • {line.status.replace("_", " ")} • Line Qty {line.lineQuantity} •
+                  Pack {line.embeddedPackCount} • Effective {line.effectiveQuantity}
+                </p>
+                <p className="font-mono text-xs text-muted">{line.rawLine}</p>
+                <div className="grid gap-2 md:grid-cols-4">
                   <input
-                    type="text"
-                    value={quantityDrafts[line.id] ?? formatQuantityValue(line.quantity)}
-                    onChange={(event) => onStagedQuantityInput(line.id, event.target.value)}
-                    onBlur={() => onStagedQuantityBlur(line.id)}
-                    className="w-full bg-card px-2 py-1 text-sm outline-none"
-                  />
-                  <div className="min-w-[88px] border-l border-edge">
-                    <StyledSelect
-                      value={line.quantityUnit}
-                      onChange={(nextValue) =>
-                        setStaged((current) =>
-                          current.map((item) =>
-                            item.id === line.id
-                              ? { ...item, quantityUnit: nextValue as QuantityUnit }
-                              : item
-                          )
-                        )
-                      }
-                      options={QUANTITY_UNIT_OPTIONS}
-                      buttonClassName="h-full rounded-none border-0 bg-card px-2 py-1 text-xs"
-                      ariaLabel="Quantity unit"
-                    />
-                  </div>
-                </div>
-
-                {sessionQuery.data?.authed ? (
-                  <>
-                    <input
-                      value={line.type}
-                      list={`staging-type-options-${line.id}`}
-                      onChange={(event) => onStagedTypeInput(line.id, event.target.value)}
-                      className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
-                      placeholder="Ingredient type"
-                    />
-                    <datalist id={`staging-type-options-${line.id}`}>
-                      {allTypeOptions.map((option) => (
-                        <option key={option} value={option} />
-                      ))}
-                    </datalist>
-                  </>
-                ) : (
-                  <StyledSelect
-                    value={line.type}
-                    onChange={(nextValue) =>
+                    value={line.name}
+                    onChange={(event) =>
                       setStaged((current) =>
                         current.map((item) =>
-                          item.id === line.id ? { ...item, type: nextValue as ItemType } : item
+                          item.id === line.id ? { ...item, name: event.target.value } : item
                         )
                       )
                     }
-                    options={allTypeOptions}
-                    buttonClassName="bg-card px-2 py-1"
-                    ariaLabel="Ingredient type"
+                    disabled={isMappingPending}
+                    className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
                   />
-                )}
 
-                <input
-                  value={line.tags.join(", ")}
-                  onChange={(event) =>
-                    setStaged((current) =>
-                      current.map((item) =>
-                        item.id === line.id
-                          ? {
-                              ...item,
-                              tags: event.target.value
-                                .split(",")
-                                .map((tag) => tag.trim())
-                                .filter(Boolean)
-                            }
-                          : item
-                      )
-                    )
-                  }
-                  className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
-                  placeholder="tag1, tag2, tag3"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => confirmMappingMutation.mutate(line.id)}
-                disabled={confirmMappingMutation.isPending}
-                className="rounded border border-edge px-3 py-2 text-xs uppercase tracking-[0.14em] text-muted transition hover:border-text hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Confirm Mapping
-              </button>
-              {line.parseWarnings.length > 0 && (
-                <p className="font-mono text-xs text-amber-500">{line.parseWarnings.join(" ")}</p>
-              )}
-            </article>
-          ))}
+                  <div className="flex rounded border border-edge bg-card">
+                    <input
+                      type="text"
+                      value={quantityDrafts[line.id] ?? formatQuantityValue(line.quantity)}
+                      onChange={(event) => onStagedQuantityInput(line.id, event.target.value)}
+                      onBlur={() => onStagedQuantityBlur(line.id)}
+                      disabled={isMappingPending}
+                      className="w-full bg-card px-2 py-1 text-sm outline-none"
+                    />
+                    <div className="min-w-[88px] border-l border-edge">
+                      <StyledSelect
+                        value={line.quantityUnit}
+                        onChange={(nextValue) =>
+                          setStaged((current) =>
+                            current.map((item) =>
+                              item.id === line.id
+                                ? { ...item, quantityUnit: nextValue as QuantityUnit }
+                                : item
+                            )
+                          )
+                        }
+                        options={QUANTITY_UNIT_OPTIONS}
+                        disabled={isMappingPending}
+                        buttonClassName="h-full rounded-none border-0 bg-card px-2 py-1 text-xs"
+                        ariaLabel="Quantity unit"
+                      />
+                    </div>
+                  </div>
+
+                  {sessionQuery.data?.authed ? (
+                    <div className="grid gap-2">
+                      <StyledSelect
+                        value={line.type}
+                        onChange={(nextValue) => onStagedTypeInput(line.id, nextValue)}
+                        options={allTypeOptions}
+                        disabled={isMappingPending}
+                        buttonClassName="bg-card px-2 py-1"
+                        ariaLabel="Ingredient type"
+                      />
+                      <input
+                        value={line.type}
+                        list={`staging-type-options-${line.id}`}
+                        onChange={(event) => onStagedTypeInput(line.id, event.target.value)}
+                        disabled={isMappingPending}
+                        className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
+                        placeholder="Custom type/category"
+                      />
+                      <datalist id={`staging-type-options-${line.id}`}>
+                        {allTypeOptions.map((option) => (
+                          <option key={option} value={option} />
+                        ))}
+                      </datalist>
+                    </div>
+                  ) : (
+                    <StyledSelect
+                      value={line.type}
+                      onChange={(nextValue) =>
+                        setStaged((current) =>
+                          current.map((item) =>
+                            item.id === line.id ? { ...item, type: nextValue as ItemType } : item
+                          )
+                        )
+                      }
+                      options={allTypeOptions}
+                      disabled={isMappingPending}
+                      buttonClassName="bg-card px-2 py-1"
+                      ariaLabel="Ingredient type"
+                    />
+                  )}
+
+                  <input
+                    value={tagDrafts[line.id] ?? formatTagInput(line.tags)}
+                    onChange={(event) =>
+                      setTagDrafts((current) => ({ ...current, [line.id]: event.target.value }))
+                    }
+                    onBlur={() => {
+                      const raw = tagDrafts[line.id] ?? formatTagInput(line.tags);
+                      setStaged((current) =>
+                        current.map((item) =>
+                          item.id === line.id
+                            ? {
+                                ...item,
+                                tags: parseTagInput(raw)
+                              }
+                            : item
+                        )
+                      );
+                      setTagDrafts((current) => {
+                        return { ...current, [line.id]: formatTagInput(parseTagInput(raw)) };
+                      });
+                    }}
+                    disabled={isMappingPending}
+                    className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
+                    placeholder="tag1, tag2, tag3"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => confirmMappingMutation.mutate(line.id)}
+                  disabled={mappingLineIdPending === line.id}
+                  className="rounded border border-edge px-3 py-2 text-xs uppercase tracking-[0.14em] text-muted transition hover:border-text hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {mappingLineIdPending === line.id ? "Saving Mapping..." : "Confirm Mapping"}
+                </button>
+                {line.parseWarnings.length > 0 && (
+                  <p className="font-mono text-xs text-amber-500">{line.parseWarnings.join(" ")}</p>
+                )}
+              </article>
+            );
+          })}
 
           {resolvedStaged.map((line) => (
             <article key={line.id} className="space-y-2 rounded border border-edge bg-canvas p-3">
@@ -513,20 +599,27 @@ export function StagingPanel() {
                 </div>
 
               {sessionQuery.data?.authed ? (
-                <>
+                <div className="grid gap-2">
+                  <StyledSelect
+                    value={line.type}
+                    onChange={(nextValue) => onStagedTypeInput(line.id, nextValue)}
+                    options={allTypeOptions}
+                    buttonClassName="bg-card px-2 py-1"
+                    ariaLabel="Ingredient type"
+                  />
                   <input
                     value={line.type}
                     list={`staging-type-options-${line.id}`}
                     onChange={(event) => onStagedTypeInput(line.id, event.target.value)}
                     className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
-                    placeholder="Ingredient type"
+                    placeholder="Custom type/category"
                   />
                   <datalist id={`staging-type-options-${line.id}`}>
                     {allTypeOptions.map((option) => (
                       <option key={option} value={option} />
                     ))}
                   </datalist>
-                </>
+                </div>
               ) : (
                 <StyledSelect
                   value={line.type}
@@ -544,22 +637,26 @@ export function StagingPanel() {
               )}
 
               <input
-                value={line.tags.join(", ")}
+                value={tagDrafts[line.id] ?? formatTagInput(line.tags)}
                 onChange={(event) =>
+                  setTagDrafts((current) => ({ ...current, [line.id]: event.target.value }))
+                }
+                onBlur={() => {
+                  const raw = tagDrafts[line.id] ?? formatTagInput(line.tags);
                   setStaged((current) =>
                     current.map((item) =>
                       item.id === line.id
                         ? {
                             ...item,
-                            tags: event.target.value
-                              .split(",")
-                              .map((tag) => tag.trim())
-                              .filter(Boolean)
+                            tags: parseTagInput(raw)
                           }
                         : item
                     )
-                  )
-                }
+                  );
+                  setTagDrafts((current) => {
+                    return { ...current, [line.id]: formatTagInput(parseTagInput(raw)) };
+                  });
+                }}
                 className="rounded border border-edge bg-card px-2 py-1 text-sm outline-none focus:border-text"
                 placeholder="tag1, tag2, tag3"
               />
