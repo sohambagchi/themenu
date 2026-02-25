@@ -10,12 +10,19 @@ import type { ItemLocation, ItemType, NewItemInput, TagValue } from "@/lib/types
 const DEFAULT_TYPES: ItemType[] = ["Protein", "Carb", "Veg", "Ferment/Pickle"];
 const CUSTOM_TYPES_STORAGE_KEY = "themenu_custom_prepared_types";
 
+const parseServingsInput = (rawValue: string): number | null => {
+  const parsed = Number(rawValue);
+  const whole = Math.trunc(parsed);
+  if (!Number.isFinite(parsed) || whole < 1) return null;
+  return whole;
+};
+
 export function MiseEnPlacePanel() {
   const queryClient = useQueryClient();
 
   const [name, setName] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState("1");
   const [dateAdded, setDateAdded] = useState(new Date().toISOString().slice(0, 10));
   const [location, setLocation] = useState<ItemLocation>("Fridge");
   const [type, setType] = useState<ItemType>("Protein");
@@ -52,6 +59,7 @@ export function MiseEnPlacePanel() {
     for (const value of customTypes) set.add(value);
     return Array.from(set);
   }, [customTypes]);
+  const parsedServings = useMemo(() => parseServingsInput(quantityInput), [quantityInput]);
 
   const sessionQuery = useQuery({
     queryKey: ["dashboard-session"],
@@ -84,10 +92,12 @@ export function MiseEnPlacePanel() {
   const createMutation = useMutation({
     mutationFn: async ({
       username,
-      password
+      password,
+      servings
     }: {
       username?: string;
       password?: string;
+      servings: number;
     }) => {
       const tags = tagsText
         .split(",")
@@ -102,7 +112,7 @@ export function MiseEnPlacePanel() {
       const payload: NewItemInput = {
         name: name.trim(),
         photoUrl: photoUrl.trim() || null,
-        quantity: Math.max(1, Math.trunc(quantity)),
+        quantity: servings,
         dateAdded,
         inventoryLabel: "Menu",
         location,
@@ -118,7 +128,7 @@ export function MiseEnPlacePanel() {
       setNotice("Menu item added to stock.");
       setName("");
       setPhotoUrl("");
-      setQuantity(1);
+      setQuantityInput("1");
       setIngredientsText("");
       setTagsText("");
       setAuthPromptOpen(false);
@@ -142,6 +152,11 @@ export function MiseEnPlacePanel() {
     setCustomTypeInput("");
   };
 
+  const stepServings = (delta: number) => {
+    const base = parsedServings ?? 1;
+    setQuantityInput(String(Math.max(1, base + delta)));
+  };
+
   return (
     <section className="rounded-lg border border-edge bg-card p-5">
       <h2 className="font-serif text-2xl">Mise en Place</h2>
@@ -154,8 +169,13 @@ export function MiseEnPlacePanel() {
         onSubmit={(event) => {
           event.preventDefault();
           setNotice("");
+          const servings = parseServingsInput(quantityInput);
+          if (servings === null) {
+            setNotice("Servings must be a non-zero number.");
+            return;
+          }
           if (sessionQuery.data?.authed) {
-            createMutation.mutate({});
+            createMutation.mutate({ servings });
             return;
           }
 
@@ -223,13 +243,42 @@ export function MiseEnPlacePanel() {
 
         <label className="block">
           <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Servings</span>
-          <input
-            type="number"
-            min={1}
-            value={quantity}
-            onChange={(event) => setQuantity(Number(event.target.value) || 1)}
-            className="mt-2 w-full rounded border border-edge bg-canvas px-3 py-2 text-sm outline-none transition focus:border-text"
-          />
+          <div className="mt-2 flex overflow-hidden rounded border border-edge bg-canvas">
+            <div className="flex w-10 flex-col border-r border-edge">
+              <button
+                type="button"
+                onClick={() => stepServings(1)}
+                className="flex-1 border-b border-edge text-sm text-muted transition hover:bg-card hover:text-text"
+                aria-label="Increase servings"
+              >
+                ^
+              </button>
+              <button
+                type="button"
+                onClick={() => stepServings(-1)}
+                disabled={(parsedServings ?? 1) <= 1}
+                className="flex-1 text-sm text-muted transition hover:bg-card hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Decrease servings"
+              >
+                v
+              </button>
+            </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={quantityInput}
+              onChange={(event) => {
+                const nextValue = event.target.value.trim();
+                if (!nextValue) {
+                  setQuantityInput("");
+                  return;
+                }
+                if (!/^\d+$/.test(nextValue)) return;
+                setQuantityInput(nextValue);
+              }}
+              className="w-full bg-canvas px-3 py-2 text-sm outline-none transition focus:border-text"
+            />
+          </div>
         </label>
 
         <label className="block">
@@ -342,9 +391,15 @@ export function MiseEnPlacePanel() {
                 disabled={createMutation.isPending || uploadMutation.isPending}
                 onClick={() => {
                   setNotice("");
+                  const servings = parseServingsInput(quantityInput);
+                  if (servings === null) {
+                    setNotice("Servings must be a non-zero number.");
+                    return;
+                  }
                   createMutation.mutate({
                     username: authUsername,
-                    password: authPassword
+                    password: authPassword,
+                    servings
                   });
                 }}
                 className="rounded border border-text bg-text px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-canvas disabled:cursor-not-allowed disabled:opacity-50"
