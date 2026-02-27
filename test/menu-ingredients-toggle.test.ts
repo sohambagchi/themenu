@@ -15,8 +15,10 @@ test("toggleExpandedById sets missing id to true and preserves unrelated ids", (
 
 test("toggleExpandedById flips true to false for target id only", () => {
   const currentMap = { a: true, b: false };
+  const snapshot = { ...currentMap };
 
   expect(toggleExpandedById(currentMap, "a")).toEqual({ a: false, b: false });
+  expect(currentMap).toEqual(snapshot);
 });
 
 test("toggleExpandedById flips false to true for target id only", () => {
@@ -83,6 +85,8 @@ test("formatIngredientsLine normalizes invalid limits to default and floors posi
   expect(formatIngredientsLine(ingredients, false, 0)).toBe("a, b, c +2");
   expect(formatIngredientsLine(ingredients, false, -1)).toBe("a, b, c +2");
   expect(formatIngredientsLine(ingredients, false, Number.NaN)).toBe("a, b, c +2");
+  expect(formatIngredientsLine(ingredients, false, Number.POSITIVE_INFINITY)).toBe("a, b, c +2");
+  expect(formatIngredientsLine(ingredients, false, Number.NEGATIVE_INFINITY)).toBe("a, b, c +2");
   expect(formatIngredientsLine(ingredients, false, 2.9)).toBe("a, b +3");
 });
 
