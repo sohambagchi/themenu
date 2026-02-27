@@ -378,7 +378,7 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
               }`}
             >
               {!isPantryView && (
-                <div className="relative h-36 w-full bg-black/10">
+                <div className="relative aspect-square w-full bg-black/10">
                   {item.photoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={item.photoUrl} alt={item.name} className="h-full w-full object-cover" />
