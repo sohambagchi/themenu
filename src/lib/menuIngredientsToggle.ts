@@ -1,4 +1,8 @@
 const DEFAULT_INGREDIENT_LIMIT = 3;
+const DASHBOARD_INGREDIENTS_PARAGRAPH_CLASS =
+  "mt-1 font-mono text-left text-xs uppercase tracking-[0.12em] text-muted";
+const DASHBOARD_INGREDIENTS_BUTTON_CLASS =
+  "mt-1 block w-full font-mono text-left text-xs uppercase tracking-[0.12em] text-muted";
 
 function normalizeIngredientLimit(limit: number): number {
   if (!Number.isFinite(limit)) {
@@ -67,4 +71,21 @@ export function toggleSingleExpandedId(
   }
 
   return itemId;
+}
+
+export function getDashboardIngredientsLineRenderContract(interactive: boolean): {
+  element: "p" | "button";
+  className: string;
+} {
+  if (!interactive) {
+    return {
+      element: "p",
+      className: DASHBOARD_INGREDIENTS_PARAGRAPH_CLASS
+    };
+  }
+
+  return {
+    element: "button",
+    className: DASHBOARD_INGREDIENTS_BUTTON_CLASS
+  };
 }

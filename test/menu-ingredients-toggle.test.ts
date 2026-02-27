@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import {
   formatDashboardIngredientsLabel,
   formatIngredientsLine,
+  getDashboardIngredientsLineRenderContract,
   isIngredientsToggleEnabled,
   toggleExpandedById,
   toggleSingleExpandedId
@@ -106,4 +107,18 @@ test("isIngredientsToggleEnabled disables interactive toggle for Menu items with
 
 test("isIngredientsToggleEnabled disables interactive toggle for Pantry items", () => {
   expect(isIngredientsToggleEnabled("Pantry", ["a", "b", "c", "d"])).toBe(false);
+});
+
+test("ingredient line render contract keeps non-interactive mode left-aligned", () => {
+  expect(getDashboardIngredientsLineRenderContract(false)).toEqual({
+    element: "p",
+    className: "mt-1 font-mono text-left text-xs uppercase tracking-[0.12em] text-muted"
+  });
+});
+
+test("ingredient line render contract keeps interactive mode left-aligned", () => {
+  expect(getDashboardIngredientsLineRenderContract(true)).toEqual({
+    element: "button",
+    className: "mt-1 block w-full font-mono text-left text-xs uppercase tracking-[0.12em] text-muted"
+  });
 });

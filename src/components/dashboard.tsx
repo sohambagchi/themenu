@@ -10,6 +10,7 @@ import {
 } from "@/lib/inventoryApi";
 import {
   formatDashboardIngredientsLabel,
+  getDashboardIngredientsLineRenderContract,
   isIngredientsToggleEnabled,
   toggleExpandedById
 } from "@/lib/menuIngredientsToggle";
@@ -403,10 +404,12 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
                         item.ingredients,
                         isToggleEnabled ? isExpanded : true
                       );
+                      const nonInteractiveRender = getDashboardIngredientsLineRenderContract(false);
+                      const interactiveRender = getDashboardIngredientsLineRenderContract(true);
 
                       if (!isToggleEnabled) {
                         return (
-                          <p className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted">
+                          <p className={nonInteractiveRender.className}>
                             {ingredientsLabel}
                           </p>
                         );
@@ -419,7 +422,7 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
                             setExpandedById((current) => toggleExpandedById(current, item.id))
                           }
                           aria-expanded={isExpanded}
-                          className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted"
+                          className={interactiveRender.className}
                         >
                           {ingredientsLabel}
                         </button>
