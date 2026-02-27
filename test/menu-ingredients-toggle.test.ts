@@ -2,8 +2,47 @@ import { expect, test } from "bun:test";
 
 import {
   formatIngredientsLine,
-  isIngredientsToggleEnabled
+  isIngredientsToggleEnabled,
+  toggleExpandedById,
+  toggleSingleExpandedId
 } from "../src/lib/menuIngredientsToggle";
+
+test("toggleExpandedById sets missing id to true and preserves unrelated ids", () => {
+  const currentMap = { a: false, b: true };
+
+  expect(toggleExpandedById(currentMap, "c")).toEqual({ a: false, b: true, c: true });
+});
+
+test("toggleExpandedById flips true to false for target id only", () => {
+  const currentMap = { a: true, b: false };
+
+  expect(toggleExpandedById(currentMap, "a")).toEqual({ a: false, b: false });
+});
+
+test("toggleExpandedById flips false to true for target id only", () => {
+  const currentMap = { a: false, b: true };
+
+  expect(toggleExpandedById(currentMap, "a")).toEqual({ a: true, b: true });
+});
+
+test("toggleExpandedById returns a new map instance", () => {
+  const currentMap = { a: true };
+  const nextMap = toggleExpandedById(currentMap, "a");
+
+  expect(nextMap).not.toBe(currentMap);
+});
+
+test("toggleSingleExpandedId returns id when current is null", () => {
+  expect(toggleSingleExpandedId(null, "item-1")).toBe("item-1");
+});
+
+test("toggleSingleExpandedId returns null when toggling same id", () => {
+  expect(toggleSingleExpandedId("item-1", "item-1")).toBeNull();
+});
+
+test("toggleSingleExpandedId returns new id when toggling different id", () => {
+  expect(toggleSingleExpandedId("item-1", "item-2")).toBe("item-2");
+});
 
 test("formatIngredientsLine returns first 3 ingredients plus +n when collapsed", () => {
   const ingredients = ["a", "b", "c", "d", "e"];

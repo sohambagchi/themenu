@@ -35,3 +35,26 @@ export function isIngredientsToggleEnabled(
 ): boolean {
   return inventoryLabel === "Menu" && ingredients.length > 0;
 }
+
+export function toggleExpandedById(
+  current: Record<string, boolean>,
+  itemId: string
+): Record<string, boolean> {
+  const nextValue = !(current[itemId] ?? false);
+  return { ...current, [itemId]: nextValue };
+}
+
+export function toggleSingleExpandedId(
+  current: string | null,
+  itemId: string
+): string | null {
+  if (current === null) {
+    return itemId;
+  }
+
+  if (current === itemId) {
+    return null;
+  }
+
+  return itemId;
+}
