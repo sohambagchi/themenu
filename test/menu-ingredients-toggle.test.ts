@@ -24,8 +24,12 @@ test("formatIngredientsLine returns full list for short lists in collapsed and e
   expect(formatIngredientsLine(ingredients, true)).toBe("a, b, c");
 });
 
-test("isIngredientsToggleEnabled enables interactive toggle for Menu items", () => {
-  expect(isIngredientsToggleEnabled("Menu", ["a", "b", "c", "d"])).toBe(true);
+test("isIngredientsToggleEnabled enables interactive toggle for Menu items when at least 1 ingredient exists", () => {
+  expect(isIngredientsToggleEnabled("Menu", ["a"])).toBe(true);
+});
+
+test("isIngredientsToggleEnabled disables interactive toggle for Menu items with no ingredients", () => {
+  expect(isIngredientsToggleEnabled("Menu", [])).toBe(false);
 });
 
 test("isIngredientsToggleEnabled disables interactive toggle for Pantry items", () => {

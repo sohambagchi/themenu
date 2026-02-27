@@ -18,5 +18,5 @@ export function isIngredientsToggleEnabled(
   inventoryLabel: "Menu" | "Pantry",
   ingredients: string[]
 ): boolean {
-  return inventoryLabel === "Menu" && ingredients.length > DEFAULT_INGREDIENT_LIMIT;
+  return inventoryLabel === "Menu" && ingredients.length > 0;
 }
