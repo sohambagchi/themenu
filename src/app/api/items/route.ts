@@ -53,6 +53,14 @@ function itemToInsertRow(item: NewItemInput, ownerUserId: string) {
   };
 }
 
+function isMissingQuantityUnitSchemaCacheError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST204" &&
+    error.message?.includes("Could not find the 'quantity_unit' column of 'items' in the schema cache")
+  );
+}
+
 export async function GET(request: Request) {
   if (!isDashboardPublicReadEnabled()) {
     const hasSession = await requireDashboardSession();
@@ -162,7 +170,14 @@ export async function POST(request: Request) {
   }
 
   const insertRows = normalized.items.map((item) => itemToInsertRow(item, ownerUserId));
-  const { error } = await supabase.from("items").insert(insertRows);
+  let usedQuantityUnitFallback = false;
+  let { error } = await supabase.from("items").insert(insertRows);
+
+  if (isMissingQuantityUnitSchemaCacheError(error as { code?: string; message?: string } | null)) {
+    const fallbackInsertRows = insertRows.map(({ quantity_unit, ...rest }) => rest);
+    ({ error } = await supabase.from("items").insert(fallbackInsertRows));
+    usedQuantityUnitFallback = !error;
+  }
 
   if (error) {
     if ((error as { code?: string }).code === "23503") {
@@ -177,5 +192,19 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  if (usedQuantityUnitFallback) {
+    console.warn("[items.create] Insert succeeded after dropping quantity_unit due to schema cache drift.");
+    return NextResponse.json({
+      ok: true,
+      warnings: [
+        {
+          code: "ITEMS_QUANTITY_UNIT_SCHEMA_CACHE_MISMATCH",
+          message:
+            "Item created, but quantity_unit was omitted because the database schema cache is stale. Apply migrations and refresh the schema cache."
+        }
+      ]
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }
