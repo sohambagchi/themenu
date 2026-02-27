@@ -227,7 +227,7 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
                       }))
                     }
                     className="w-28 rounded border border-edge bg-card px-2 py-1 font-mono text-sm outline-none transition focus:border-text"
-                    aria-label="Action quantity"
+                    aria-label={`${actionLabel} quantity for ${row.item.name}`}
                   />
                   <span className="min-w-12 text-center font-mono text-xs text-muted">
                     {row.item.quantityUnit || "(blank)"}
@@ -395,18 +395,36 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
                   <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
                     {item.type} • {item.location}
                   </p>
-                  {isIngredientsToggleEnabled(inventoryLabel, item.ingredients) && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedById((current) => toggleExpandedById(current, item.id))
+                  {item.ingredients.length > 0 &&
+                    (() => {
+                      const isToggleEnabled = isIngredientsToggleEnabled(inventoryLabel, item.ingredients);
+                      const isExpanded = expandedById[item.id] ?? false;
+                      const ingredientsLabel = formatDashboardIngredientsLabel(
+                        item.ingredients,
+                        isToggleEnabled ? isExpanded : true
+                      );
+
+                      if (!isToggleEnabled) {
+                        return (
+                          <p className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted">
+                            {ingredientsLabel}
+                          </p>
+                        );
                       }
-                      aria-expanded={expandedById[item.id] ?? false}
-                      className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted"
-                    >
-                      {formatDashboardIngredientsLabel(item.ingredients, expandedById[item.id] ?? false)}
-                    </button>
-                  )}
+
+                      return (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedById((current) => toggleExpandedById(current, item.id))
+                          }
+                          aria-expanded={isExpanded}
+                          className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted"
+                        >
+                          {ingredientsLabel}
+                        </button>
+                      );
+                    })()}
                 </div>
 
                 <div className="flex items-center justify-between text-sm">

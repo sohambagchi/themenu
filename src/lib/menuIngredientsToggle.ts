@@ -39,9 +39,11 @@ export function formatDashboardIngredientsLabel(
 
 export function isIngredientsToggleEnabled(
   inventoryLabel: "Menu" | "Pantry",
-  ingredients: string[]
+  ingredients: string[],
+  limit = DEFAULT_INGREDIENT_LIMIT
 ): boolean {
-  return inventoryLabel === "Menu" && ingredients.length > 0;
+  const normalizedLimit = normalizeIngredientLimit(limit);
+  return inventoryLabel === "Menu" && ingredients.length > normalizedLimit;
 }
 
 export function toggleExpandedById(

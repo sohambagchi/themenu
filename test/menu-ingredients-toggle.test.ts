@@ -92,8 +92,12 @@ test("formatIngredientsLine normalizes invalid limits to default and floors posi
   expect(formatIngredientsLine(ingredients, false, 2.9)).toBe("a, b +3");
 });
 
-test("isIngredientsToggleEnabled enables interactive toggle for Menu items when at least 1 ingredient exists", () => {
-  expect(isIngredientsToggleEnabled("Menu", ["a"])).toBe(true);
+test("isIngredientsToggleEnabled enables interactive toggle for Menu items only when collapsed view hides ingredients", () => {
+  expect(isIngredientsToggleEnabled("Menu", ["a", "b", "c", "d"])).toBe(true);
+});
+
+test("isIngredientsToggleEnabled disables interactive toggle for Menu items when all ingredients are already visible", () => {
+  expect(isIngredientsToggleEnabled("Menu", ["a", "b", "c"])).toBe(false);
 });
 
 test("isIngredientsToggleEnabled disables interactive toggle for Menu items with no ingredients", () => {
