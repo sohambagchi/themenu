@@ -24,6 +24,29 @@ test("formatIngredientsLine returns full list for short lists in collapsed and e
   expect(formatIngredientsLine(ingredients, true)).toBe("a, b, c");
 });
 
+test("formatIngredientsLine returns empty string for empty ingredients in collapsed and expanded states", () => {
+  const ingredients: string[] = [];
+
+  expect(formatIngredientsLine(ingredients, false)).toBe("");
+  expect(formatIngredientsLine(ingredients, true)).toBe("");
+});
+
+test("formatIngredientsLine respects a custom positive integer limit", () => {
+  const ingredients = ["a", "b", "c", "d"];
+
+  expect(formatIngredientsLine(ingredients, false, 2)).toBe("a, b +2");
+  expect(formatIngredientsLine(ingredients, true, 2)).toBe("a, b, c, d");
+});
+
+test("formatIngredientsLine normalizes invalid limits to default and floors positive non-integers", () => {
+  const ingredients = ["a", "b", "c", "d", "e"];
+
+  expect(formatIngredientsLine(ingredients, false, 0)).toBe("a, b, c +2");
+  expect(formatIngredientsLine(ingredients, false, -1)).toBe("a, b, c +2");
+  expect(formatIngredientsLine(ingredients, false, Number.NaN)).toBe("a, b, c +2");
+  expect(formatIngredientsLine(ingredients, false, 2.9)).toBe("a, b +3");
+});
+
 test("isIngredientsToggleEnabled enables interactive toggle for Menu items when at least 1 ingredient exists", () => {
   expect(isIngredientsToggleEnabled("Menu", ["a"])).toBe(true);
 });

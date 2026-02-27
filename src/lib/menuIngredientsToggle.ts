@@ -1,16 +1,31 @@
 const DEFAULT_INGREDIENT_LIMIT = 3;
 
+function normalizeIngredientLimit(limit: number): number {
+  if (!Number.isFinite(limit)) {
+    return DEFAULT_INGREDIENT_LIMIT;
+  }
+
+  const parsedLimit = Math.floor(limit);
+  if (parsedLimit <= 0) {
+    return DEFAULT_INGREDIENT_LIMIT;
+  }
+
+  return parsedLimit;
+}
+
 export function formatIngredientsLine(
   ingredients: string[],
   expanded: boolean,
   limit = DEFAULT_INGREDIENT_LIMIT
 ): string {
-  if (expanded || ingredients.length <= limit) {
+  const normalizedLimit = normalizeIngredientLimit(limit);
+
+  if (expanded || ingredients.length <= normalizedLimit) {
     return ingredients.join(", ");
   }
 
-  const hiddenCount = ingredients.length - limit;
-  const visibleIngredients = ingredients.slice(0, limit).join(", ");
+  const hiddenCount = ingredients.length - normalizedLimit;
+  const visibleIngredients = ingredients.slice(0, normalizedLimit).join(", ");
   return `${visibleIngredients} +${hiddenCount}`;
 }
 
