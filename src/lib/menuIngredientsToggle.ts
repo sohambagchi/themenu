@@ -29,6 +29,14 @@ export function formatIngredientsLine(
   return `${visibleIngredients} +${hiddenCount}`;
 }
 
+export function formatDashboardIngredientsLabel(
+  ingredients: string[],
+  expanded: boolean,
+  limit = DEFAULT_INGREDIENT_LIMIT
+): string {
+  return `Ingredients: ${formatIngredientsLine(ingredients, expanded, limit)}`;
+}
+
 export function isIngredientsToggleEnabled(
   inventoryLabel: "Menu" | "Pantry",
   ingredients: string[]

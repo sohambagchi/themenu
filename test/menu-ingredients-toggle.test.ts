@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  formatDashboardIngredientsLabel,
   formatIngredientsLine,
   isIngredientsToggleEnabled,
   toggleExpandedById,
@@ -50,6 +51,7 @@ test("formatIngredientsLine returns first 3 ingredients plus +n when collapsed",
   const ingredients = ["a", "b", "c", "d", "e"];
 
   expect(formatIngredientsLine(ingredients, false)).toBe("a, b, c +2");
+  expect(formatDashboardIngredientsLabel(ingredients, false)).toBe("Ingredients: a, b, c +2");
 });
 
 test("formatIngredientsLine returns all ingredients joined with comma when expanded", () => {

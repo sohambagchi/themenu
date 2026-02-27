@@ -8,6 +8,11 @@ import {
   consumeInventoryItems,
   fetchInventoryItems
 } from "@/lib/inventoryApi";
+import {
+  formatDashboardIngredientsLabel,
+  isIngredientsToggleEnabled,
+  toggleExpandedById
+} from "@/lib/menuIngredientsToggle";
 import { formatQuantityValue, formatQuantityWithUnit, parseQuantityInput } from "@/lib/quantity";
 import { getRecommendations } from "@/lib/recommendationEngine";
 import { StyledSelect } from "@/components/styled-select";
@@ -20,18 +25,12 @@ interface ActionItem {
   quantity: number;
 }
 
-function formatIngredientSummary(ingredients: string[], limit = 3) {
-  if (ingredients.length === 0) return "";
-  if (ingredients.length <= limit) return ingredients.join(", ");
-  const shown = ingredients.slice(0, limit).join(", ");
-  return `${shown} +${ingredients.length - limit}`;
-}
-
 export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }) {
   const queryClient = useQueryClient();
   const [typeFilter, setTypeFilter] = useState<"All" | ItemType>("All");
   const [tagFilter, setTagFilter] = useState<string>("All");
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [expandedById, setExpandedById] = useState<Record<string, boolean>>({});
 
   const [actionMap, setActionMap] = useState<Record<string, number>>({});
   const [actionQuantityDrafts, setActionQuantityDrafts] = useState<Record<string, string>>({});
@@ -396,10 +395,17 @@ export function Dashboard({ inventoryLabel }: { inventoryLabel: InventoryLabel }
                   <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
                     {item.type} • {item.location}
                   </p>
-                  {!isPantryView && item.ingredients.length > 0 && (
-                    <p className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted">
-                      Ingredients: {formatIngredientSummary(item.ingredients)}
-                    </p>
+                  {isIngredientsToggleEnabled(inventoryLabel, item.ingredients) && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedById((current) => toggleExpandedById(current, item.id))
+                      }
+                      aria-expanded={expandedById[item.id] ?? false}
+                      className="mt-1 font-mono text-xs uppercase tracking-[0.12em] text-muted"
+                    >
+                      {formatDashboardIngredientsLabel(item.ingredients, expandedById[item.id] ?? false)}
+                    </button>
                   )}
                 </div>
 
